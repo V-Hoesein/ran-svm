@@ -89,16 +89,45 @@ class TextClassifier:
         return results
 
 
-def main():
+dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads','dataset.csv'))
+
+def predict(text_test: str):
     # Load dataset
-    dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__), 'dataset-50.csv'))
     df = pd.read_csv(dataset_path)
 
     # Initialize preprocessor and preprocess the comments
     preprocessor = TextPreprocessor()
     df['preprocessed_comment'] = df['comment'].apply(preprocessor.preprocess)
 
-    # Export preprocessed data
+    # Split the data into training and testing sets
+    X_train = df['preprocessed_comment']
+    y_train = df['label']
+
+    # Initialize classifier
+    classifier = TextClassifier()
+
+    # Train the model
+    classifier.train(X_train, y_train)
+
+    # Preprocess the input text
+    text_test_preprocessed = preprocessor.preprocess(text_test)
+
+    # Predict the label for the input text
+    prediction = classifier.predict([text_test_preprocessed])
+
+    # Return the prediction result
+    return prediction[0]
+
+
+def main(text_test: str):
+    # Load dataset
+    df = pd.read_csv(dataset_path)
+
+    # Initialize preprocessor and preprocess the comments
+    preprocessor = TextPreprocessor()
+    df['preprocessed_comment'] = df['comment'].apply(preprocessor.preprocess)
+
+    # *Export preprocessed data
     df[['comment', 'preprocessed_comment']].to_csv('preprocessed_data.csv', index=False)
 
     # Split the data into training and testing sets
@@ -124,9 +153,12 @@ def main():
     for metric, score in results.items():
         print(f'{metric}: {score}')
 
-    new_comment = preprocessor.preprocess('alhamdulillah yah jelek banget wajah mu kak wkkowk')
-    print(classifier.predict([new_comment]))
+    new_comment = preprocessor.preprocess(text_test)
+    result = classifier.predict([new_comment])
+    
+    return 'baik'
 
 
-if __name__ == '__main__':
-    main()
+# if __name__ == '__main__':
+#     # main('jelek')
+#     predict('bagus')
