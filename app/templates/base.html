@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    {% block head %}
+      <title>
+        {% block title %}
+
+        {% endblock %}
+      </title>
+    {% endblock %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='dist/css/output.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='dist/css/sweetalert2.min.css') }}" />
+  </head>
+  <body class="bg-zinc-800 flex flex-col justify-between h-screen">
+    <header class="container flex m-auto py-3 text-slate-100">
+      <h1 class="font-semibold text-2xl">SVM - Youtube Vloger</h1>
+    </header>
+
+    <main class="bg-white h-full relative">
+      <div id="particles-js" class="absolute inset-0 z-0"></div>
+
+      <!-- Main Content -->
+      <div class="relative">
+        {% block content %}
+
+        {% endblock %}
+      </div>
+    </main>
+
+    <script src="{{ url_for('static', filename='dist/js/flowbite.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='dist/js/sweetalert2.all.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='dist/js/particles.min.js') }}"></script>
+    <script>
+      /* particlesJS.load(@dom-id, @path-json, @callback (optional)); */
+      particlesJS.load('particles-js', '/static/dist/js/particles.json', function () {
+        console.log('callback - particles.js config loaded')
+      })
+    </script>
+
+    {% with messages=get_flashed_messages(with_categories=True) %}
+      <script>
+      document.addEventListener('DOMContentLoaded', function() {
+          {% for category, message in messages %}
+              Swal.fire({
+                  icon: '{% if category == 'success' %}success{% elif category == 'warning' %}warning{% else %}error{% endif %}',
+                  title: '{{ category|capitalize }}',
+                  text: '{{ message|tojson|safe }}',
+                  confirmButtonColor: '{% if category == 'warning' %}#f39c12{% else %}#3085d6{% endif %}',  // Warning color
+                  confirmButtonText: 'OK'
+              });
+          {% endfor %}
+      });
+      </script>
+    {% endwith %}
+
+    {% block script %}
+
+    {% endblock %}
+  </body>
+</html>

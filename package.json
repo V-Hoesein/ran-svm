@@ -1,0 +1,21 @@
+{
+  "name": "svm",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build:css": "npx tailwindcss -i ./app/static/src/css/input.css -o ./app/static/dist/css/output.css --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.41",
+    "tailwindcss": "^3.4.10"
+  },
+  "dependencies": {
+    "flowbite": "^2.5.1",
+    "sweetalert2": "^11.12.4"
+  }
+}

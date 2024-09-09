@@ -50,16 +50,26 @@ class TextPreprocessor:
 class TextClassifier:
     def __init__(self, vectorizer=None, model=None):
         self.vectorizer = vectorizer or TfidfVectorizer()
-        self.model = model or svm.SVC(kernel='linear')
+        self.model = model or svm.SVC(random_state=0, kernel='rbf')
 
     def train(self, X_train, y_train):
         """Train the model with the training data."""
         X_train_vec = self.vectorizer.fit_transform(X_train)
+
+        # Export the TF-IDF matrix
+        tfidf_df = pd.DataFrame(X_train_vec.toarray(), columns=self.vectorizer.get_feature_names_out())
+        tfidf_df.to_csv('tfidf_train.csv', index=False)
+        
         self.model.fit(X_train_vec, y_train)
 
     def predict(self, X_test):
         """Predict the labels of the test set."""
         X_test_vec = self.vectorizer.transform(X_test)
+
+        # Export the test TF-IDF matrix
+        tfidf_test_df = pd.DataFrame(X_test_vec.toarray(), columns=self.vectorizer.get_feature_names_out())
+        tfidf_test_df.to_csv('tfidf_test.csv', index=False)
+        
         return self.model.predict(X_test_vec)
 
     def evaluate(self, y_test, y_pred):
@@ -71,20 +81,28 @@ class TextClassifier:
             'Recall': recall_score(y_test, y_pred, pos_label='positif'),
             'Confusion Matrix': confusion_matrix(y_test, y_pred)
         }
+
+        # Export evaluation metrics to CSV
+        eval_df = pd.DataFrame.from_dict(results, orient='index', columns=['Score'])
+        eval_df.to_csv('evaluation_metrics.csv')
+
         return results
 
 
 def main():
     # Load dataset
-    dataset_path = os.path.realpath(os.path.join(os.path.dirname(__name__), 'dataset-10.csv'))
+    dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__), 'dataset-50.csv'))
     df = pd.read_csv(dataset_path)
 
     # Initialize preprocessor and preprocess the comments
     preprocessor = TextPreprocessor()
     df['preprocessed_comment'] = df['comment'].apply(preprocessor.preprocess)
 
+    # Export preprocessed data
+    df[['comment', 'preprocessed_comment']].to_csv('preprocessed_data.csv', index=False)
+
     # Split the data into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(df['preprocessed_comment'], df['label'], test_size=0.2, stratify=df['label'], random_state=20)
+    X_train, X_test, y_train, y_test = train_test_split(df['preprocessed_comment'], df['label'], test_size=0.2, stratify=df['label'], random_state=0)
 
     # Initialize classifier and vectorizer
     classifier = TextClassifier()
@@ -95,6 +113,10 @@ def main():
     # Predict the test set
     y_pred = classifier.predict(X_test)
 
+    # Export predicted labels
+    predictions_df = pd.DataFrame({'Actual': y_test, 'Predicted': y_pred})
+    predictions_df.to_csv('predictions.csv', index=False)
+
     # Evaluate the model
     results = classifier.evaluate(y_test, y_pred)
 
@@ -102,9 +124,8 @@ def main():
     for metric, score in results.items():
         print(f'{metric}: {score}')
 
-    new_comment = preprocessor.preprocess('jelek')
+    new_comment = preprocessor.preprocess('alhamdulillah yah jelek banget wajah mu kak wkkowk')
     print(classifier.predict([new_comment]))
-    
 
 
 if __name__ == '__main__':
