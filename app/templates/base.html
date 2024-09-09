@@ -11,14 +11,21 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='dist/css/output.css') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='dist/css/sweetalert2.min.css') }}" />
   </head>
-  <body class="bg-zinc-800 flex flex-col justify-between h-screen">
-    <header class="container flex m-auto py-3 text-slate-100">
+  <body class="bg-slate-800 flex flex-col justify-between h-screen">
+    <header class="container flex m-auto py-3 text-slate-100 justify-between">
       <h1 class="font-semibold text-2xl">SVM - Youtube Vloger</h1>
+      <form action="{{ url_for('main_routes.upload_file') }}" class="flex gap-1">
+        <input class="block text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 dark:text-gray-400 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400" id="file_input" type="file" accept=".csv" required />
+        <button type="submit" class="text-slate-700 border border-slate-700 hover:bg-slate-700 hover:text-white focus:ring-4 focus:outline-none focus:ring-slate-300 font-medium rounded-lg text-sm p-2.5 text-center inline-flex items-center me-2 dark:border-slate-500 dark:text-slate-500 dark:hover:text-white dark:focus:ring-slate-800 dark:hover:bg-slate-500">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="w-5 h-5 text-white">
+            <path fill="currentColor" d="M288 109.3L288 352c0 17.7-14.3 32-32 32s-32-14.3-32-32l0-242.7-73.4 73.4c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3l128-128c12.5-12.5 32.8-12.5 45.3 0l128 128c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L288 109.3zM64 352l128 0c0 35.3 28.7 64 64 64s64-28.7 64-64l128 0c35.3 0 64 28.7 64 64l0 32c0 35.3-28.7 64-64 64L64 512c-35.3 0-64-28.7-64-64l0-32c0-35.3 28.7-64 64-64zM432 456a24 24 0 1 0 0-48 24 24 0 1 0 0 48z" />
+          </svg>
+          <span class="sr-only">Icon description</span>
+        </button>
+      </form>
     </header>
 
     <main class="bg-white h-full relative">
-      <div id="particles-js" class="absolute inset-0 z-0"></div>
-
       <!-- Main Content -->
       <div class="relative">
         {% block content %}
@@ -27,15 +34,10 @@
       </div>
     </main>
 
+    <footer class="flex m-auto text-slate-100 justify-between bg-slate-900 py-5"></footer>
+
     <script src="{{ url_for('static', filename='dist/js/flowbite.min.js') }}"></script>
     <script src="{{ url_for('static', filename='dist/js/sweetalert2.all.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='dist/js/particles.min.js') }}"></script>
-    <script>
-      /* particlesJS.load(@dom-id, @path-json, @callback (optional)); */
-      particlesJS.load('particles-js', '/static/dist/js/particles.json', function () {
-        console.log('callback - particles.js config loaded')
-      })
-    </script>
 
     {% with messages=get_flashed_messages(with_categories=True) %}
       <script>

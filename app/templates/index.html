@@ -5,9 +5,21 @@
 {% endblock %}
 
 {% block content %}
-  {% if alert %}
-
-  {% endif %}
+  {% if alert %}{% endif %}
+  <section class="flex flex-col container mx-auto justify-center items-center py-32 space-y-10">
+    <div class="text-center text-slate-800">
+      <h1 class="text-5xl font-bold capitalize font-serif mb-1 italic">support vector machine (SVM)</h1>
+      <p class="text-xl capitalize font-semibold hover:underline">~ study case: analisis sentimen komentar saluran YouTube beauty vlogger berbahasa Indonesia ~</p>
+    </div>
+    <form action="{{ url_for('main_routes.single_classification') }}" method="POST" class="grid gap-4 grid-cols-12 w-full max-w-[720px]">
+      <input type="text" name="text" id="text" class="bg-gray-50 border text-gray-900 text-sm rounded-lg focus:ring-black-500 focus:border-black-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-black-500 dark:focus:border-black-500 col-span-11 border-slate-700" placeholder="Masukkan teks yang ingin dilakukan pengujian sentiment" value="{{ text or '' }}" required />
+      <button type="submit" class="text-slate-700 border border-slate-700 hover:bg-slate-50 hover:text-white focus:ring-4 focus:outline-none focus:ring-slate-300 font-medium rounded-lg text-sm p-2.5 text-center inline-flex items-center me-2 dark:border-slate-500 dark:text-slate-50 dark:hover:text-white dark:focus:ring-slate-800 dark:hover:bg-slate-50 w-full justify-center">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" style="fill: rgba(0, 0, 0, 1);transform: ;msFilter:;">
+          <path d="M6 4h12v2H6zm.707 11.707L11 11.414V20h2v-8.586l4.293 4.293 1.414-1.414L12 7.586l-6.707 6.707z"></path>
+        </svg>
+      </button>
+    </form>
+  </section>
 {% endblock %}
 
 {% block script %}
