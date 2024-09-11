@@ -55,8 +55,9 @@ class TextClassifier:
     def __init__(self, vectorizer=None, model=None):
         self.vectorizer = vectorizer or TfidfVectorizer()
         self.model = model or svm.SVC(random_state=0, kernel='rbf')
+        self.result_path = result_path
 
-    def calculate_tf(self, X_train_vec):
+    def calculate_raw_tf(self, X_train_vec):
         """Calculate Term Frequency (TF) without normalization."""
         return X_train_vec.toarray()
 
@@ -64,6 +65,7 @@ class TextClassifier:
         """Calculate Term Frequency Normalized (TF Norm)."""
         tf_array = X_train_vec.toarray()
         tf_norm = tf_array / np.linalg.norm(tf_array, axis=1, keepdims=True)  # Normalized TF
+        tf_norm = np.nan_to_num(tf_norm)  # Handle potential NaN values
         return tf_norm
 
     def calculate_df_idf(self, X_train_vec):
@@ -83,14 +85,17 @@ class TextClassifier:
         tfidf_transposed = tfidf_df.T  # Transpose the TF matrix
         
         # Add extra columns: TF Norm, DF, IDF, TF-IDF
-        tfidf_transposed['TFNorm'] = tf_norm.sum(axis=0)  # Sum TF Norm across all documents for each term
+        tfidf_transposed['TFNormAll'] = tf_norm.sum(axis=0)  # Sum TF Norm across all documents for each term
         tfidf_transposed['DF'] = df  # Document Frequency
         tfidf_transposed['IDF'] = idf  # Inverse Document Frequency
         tfidf_transposed['TFIDF'] = tfidf_array.sum(axis=0)  # Sum TF-IDF values for each term
 
         # Set the document names as columns
-        tfidf_transposed.columns = [f'D{i+1}' for i in range(X_vec.shape[0])] + ['TFNorm', 'DF', 'IDF', 'TFIDF']
+        tfidf_transposed.columns = [f'D{i+1}' for i in range(X_vec.shape[0])] + ['TFNormAll', 'DF', 'IDF', 'TFIDF']
         tfidf_transposed.index.name = 'Terms'  # Set the index name as 'Terms'
+
+        # Round all numeric values to 3 decimal places
+        tfidf_transposed = tfidf_transposed.round(3)
 
         return tfidf_transposed
 
@@ -99,7 +104,7 @@ class TextClassifier:
         X_train_vec = self.vectorizer.fit_transform(X_train)
 
         # Calculate TF, TF Norm, DF, and IDF
-        tf = self.calculate_tf(X_train_vec)
+        tf = self.calculate_raw_tf(X_train_vec)
         tf_norm = self.calculate_tf_norm(X_train_vec)
         df, idf = self.calculate_df_idf(X_train_vec)
 
@@ -107,7 +112,7 @@ class TextClassifier:
         tfidf_train_transposed = self.create_export_dataframe(X_train_vec, tf_norm, df, idf)
 
         # Export the training results to CSV
-        tfidf_train_transposed.to_csv(f'{result_path}/tfidf_train_with_metrics.csv', index=True)
+        tfidf_train_transposed.to_csv(f'{self.result_path}/tfidf_train_with_metrics.csv', index=True)
 
         # Train the model
         self.model.fit(X_train_vec, y_train)
@@ -117,7 +122,7 @@ class TextClassifier:
         X_test_vec = self.vectorizer.transform(X_test)
 
         # Calculate TF Norm, DF, and IDF for test set
-        tf = self.calculate_tf(X_test_vec)
+        tf = self.calculate_raw_tf(X_test_vec)
         tf_norm = self.calculate_tf_norm(X_test_vec)
         df, idf = self.calculate_df_idf(X_test_vec)
 
@@ -125,7 +130,7 @@ class TextClassifier:
         tfidf_test_transposed = self.create_export_dataframe(X_test_vec, tf_norm, df, idf)
 
         # Export the test results to CSV
-        tfidf_test_transposed.to_csv(f'{result_path}/tfidf_test_with_metrics.csv', index=True)
+        tfidf_test_transposed.to_csv(f'{self.result_path}/tfidf_test_with_metrics.csv', index=True)
 
         return self.model.predict(X_test_vec)
 
@@ -141,7 +146,7 @@ class TextClassifier:
 
         # Export evaluation metrics to CSV
         eval_df = pd.DataFrame.from_dict(results, orient='index', columns=['Score'])
-        eval_df.to_csv(f'{result_path}/evaluation_metrics.csv')
+        eval_df.to_csv(f'{self.result_path}/evaluation_metrics.csv')
 
         return results
 
