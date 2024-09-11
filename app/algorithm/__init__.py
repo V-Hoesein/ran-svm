@@ -1,179 +1,126 @@
 import os
+import string
 import pandas as pd
 import numpy as np
 import re
-import string
 from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
 from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
 from Sastrawi.StopWordRemover.StopWordRemoverFactory import StopWordRemoverFactory
-from sklearn.model_selection import train_test_split
+from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn import svm
-from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score, confusion_matrix
+from collections import Counter
+from sklearn.svm import SVC
 
-dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads','dataset.csv'))
-result_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads'))
-
-class TextPreprocessor:
-    def __init__(self):
+class TextClassifier:
+    def __init__(self, dataset_path, result_path):
+        self.dataset_path = dataset_path
+        self.result_path = result_path
+        
+        # Initialize Sastrawi tools
         self.stemmer = StemmerFactory().create_stemmer()
-        self.stopword_remover = StopWordRemoverFactory().create_stop_word_remover()
-        self.combined_stopwords = set(StopWordRemoverFactory().get_stop_words()).union(set(stopwords.words('english')))
-
+        stopword_factory = StopWordRemoverFactory()
+        self.combined_stopwords = set(stopword_factory.get_stop_words()).union(set(stopwords.words('english')))
+        
+        # Load dataset
+        self.df_comments = pd.read_csv(self.dataset_path)
+        
+        # Preprocess text
+        self.df_comments['preprocess'] = self.df_comments['comment'].apply(self.preprocess_text)
+        
+        # Initialize TF-IDF Vectorizer
+        self.vectorizer = TfidfVectorizer()
+    
     def clean_text(self, text):
-        """Remove punctuation, digits, and unwanted characters."""
         text = text.translate(str.maketrans('', '', string.punctuation))
         text = re.sub(r'\d+', '', text)
         text = re.sub(r'\s+', ' ', text).strip()
         text = re.sub(r'[^a-zA-Z\s]', '', text)
         return text
 
-    def tokenize(self, text):
-        """Lowercase text and tokenize."""
-        text = text.lower()
+    def preprocess_text(self, text):
+        text = self.clean_text(text).lower()
         tokens = word_tokenize(text)
-        return tokens
-
-    def remove_stopwords(self, tokens):
-        """Remove stopwords."""
-        return [word for word in tokens if word not in self.combined_stopwords]
-
-    def stem(self, tokens):
-        """Apply stemming."""
-        return [self.stemmer.stem(word) for word in tokens]
-
-    def preprocess(self, text):
-        """Pipeline for text preprocessing: clean, tokenize, remove stopwords, and stem."""
-        text = self.clean_text(text)
-        tokens = self.tokenize(text)
-        tokens = self.remove_stopwords(tokens)
-        return ' '.join(self.stem(tokens))
-
-
-class TextClassifier:
-    def __init__(self, vectorizer=None, model=None):
-        self.vectorizer = vectorizer or TfidfVectorizer()
-        self.model = model or svm.SVC(random_state=0, kernel='rbf')
-        self.result_path = result_path
-
-    def calculate_raw_tf(self, X_train_vec):
-        """Calculate Term Frequency (TF) without normalization."""
-        return X_train_vec.toarray()
-
-    def calculate_tf_norm(self, X_train_vec):
-        """Calculate Term Frequency Normalized (TF Norm)."""
-        tf_array = X_train_vec.toarray()
-        tf_norm = tf_array / np.linalg.norm(tf_array, axis=1, keepdims=True)  # Normalized TF
-        tf_norm = np.nan_to_num(tf_norm)  # Handle potential NaN values
-        return tf_norm
-
-    def calculate_df_idf(self, X_train_vec):
-        """Calculate Document Frequency (DF) and Inverse Document Frequency (IDF)."""
-        df = np.sum(X_train_vec.toarray() > 0, axis=0)  # Count of documents containing each term (DF)
-        idf = np.log((1 + X_train_vec.shape[0]) / (1 + df)) + 1  # Calculate IDF
-        return df, idf
-
-    def create_export_dataframe(self, X_vec, tf_norm, df, idf):
-        """Create DataFrame for exporting TF, TFNorm, DF, IDF, and TF-IDF."""
-        # Get TF, DF, and IDF values
-        tf_array = X_vec.toarray()
-        tfidf_array = tf_array * idf  # Calculate TF-IDF by multiplying TF with IDF
-
-        # Create DataFrame with Terms as rows
-        tfidf_df = pd.DataFrame(tf_array, columns=self.vectorizer.get_feature_names_out())
-        tfidf_transposed = tfidf_df.T  # Transpose the TF matrix
+        tokens = [word for word in tokens if word not in self.combined_stopwords]
+        stemmed = [self.stemmer.stem(word) for word in tokens]
+        return ' '.join(stemmed)
+    
+    def compute_raw_tf(self, doc):
+        words = doc.split()
+        count = Counter(words)
+        return count
+    
+    def compute_tf(self, doc):
+        words = doc.split()
+        count = Counter(words)
+        total_terms = len(words)
+        tf = {term: count[term] / total_terms for term in count}
+        return tf
+    
+    def train_model(self):
+        # Fit the vectorizer on training data
+        X_train = self.vectorizer.fit_transform(self.df_comments['preprocess'])
+        y_train = self.df_comments['label']
         
-        # Add extra columns: TF Norm, DF, IDF, TF-IDF
-        tfidf_transposed['TFNormAll'] = tf_norm.sum(axis=0)  # Sum TF Norm across all documents for each term
-        tfidf_transposed['DF'] = df  # Document Frequency
-        tfidf_transposed['IDF'] = idf  # Inverse Document Frequency
-        tfidf_transposed['TFIDF'] = tfidf_array.sum(axis=0)  # Sum TF-IDF values for each term
+        # Get TF-IDF terms and IDF values
+        terms = self.vectorizer.get_feature_names_out()
+        idf_values = self.vectorizer.idf_
+        
+        # Create DataFrame for TF-IDF
+        tfidf_df = pd.DataFrame(X_train.toarray().T, index=terms, columns=[f'D{i+1}' for i in range(len(self.df_comments['preprocess']))])
+        idf_df = pd.DataFrame(idf_values, index=terms, columns=["IDF"])
+        
+        # Compute raw TF for each document
+        raw_tf_dicts = [self.compute_raw_tf(doc) for doc in self.df_comments['preprocess']]
+        raw_tf_df = pd.DataFrame(raw_tf_dicts, index=[f'D{i+1}' for i in range(len(self.df_comments['preprocess']))]).T
+        
+        # Compute normalized TF for each document
+        tf_dicts = [self.compute_tf(doc) for doc in self.df_comments['preprocess']]
+        tf_df = pd.DataFrame(tf_dicts, index=[f'D{i+1}' for i in range(len(self.df_comments['preprocess']))]).T
+        
+        # Fill NaN values with 0
+        raw_tf_df = raw_tf_df.fillna(0)
+        tf_df = tf_df.fillna(0)
+        idf_df = idf_df.fillna(0)
+        tfidf_df = tfidf_df.fillna(0)
+        
+        # Sum all normalized TF values across all documents
+        tf_norm_all = tf_df.sum(axis=1)
+        
+        # Compute Document Frequency (DF)
+        df_values = (raw_tf_df > 0).sum(axis=1)
+        
+        # Create final DataFrame
+        final_df = pd.DataFrame(index=terms)
+        final_df['Terms'] = terms
+        final_df = final_df.join(raw_tf_df.add_prefix('TF'))
+        final_df = final_df.join(tf_df.add_prefix('TFN'))
+        final_df['TFNAll'] = tf_norm_all
+        final_df['DF'] = df_values
+        final_df['IDF'] = idf_df['IDF']
+        final_df = final_df.join(tfidf_df.add_prefix('TFIDF_'))
+        final_df = final_df.round(3)
+        
+        # Export final DataFrame to CSV
+        final_df.to_csv(f'{self.result_path}/train_metrics.csv', index=False)
+        
+        # Train the SVM model
+        self.model = SVC(random_state=0, kernel='linear')
+        self.model.fit(X_train, y_train)
+    
+    def predict(self, text_test: str):
+        X_test = self.preprocess_text(text_test)
+        X_test_vectorized = self.vectorizer.transform([X_test])
+        prediction = self.model.predict(X_test_vectorized)
+        return prediction[0]
 
-        # Set the document names as columns
-        tfidf_transposed.columns = [f'D{i+1}' for i in range(X_vec.shape[0])] + ['TFNormAll', 'DF', 'IDF', 'TFIDF']
-        tfidf_transposed.index.name = 'Terms'  # Set the index name as 'Terms'
+def predict(new_text:str):
+    # Usage
+    dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'dataset.csv'))
+    result_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads'))
 
-        # Round all numeric values to 3 decimal places
-        tfidf_transposed = tfidf_transposed.round(3)
+    classifier = TextClassifier(dataset_path, result_path)
+    classifier.train_model()
 
-        return tfidf_transposed
-
-    def train(self, X_train, y_train):
-        """Train the model with the training data."""
-        X_train_vec = self.vectorizer.fit_transform(X_train)
-
-        # Calculate TF, TF Norm, DF, and IDF
-        tf = self.calculate_raw_tf(X_train_vec)
-        tf_norm = self.calculate_tf_norm(X_train_vec)
-        df, idf = self.calculate_df_idf(X_train_vec)
-
-        # Create DataFrame for export
-        tfidf_train_transposed = self.create_export_dataframe(X_train_vec, tf_norm, df, idf)
-
-        # Export the training results to CSV
-        tfidf_train_transposed.to_csv(f'{self.result_path}/tfidf_train_with_metrics.csv', index=True)
-
-        # Train the model
-        self.model.fit(X_train_vec, y_train)
-
-    def predict(self, X_test):
-        """Predict the labels of the test set."""
-        X_test_vec = self.vectorizer.transform(X_test)
-
-        # Calculate TF Norm, DF, and IDF for test set
-        tf = self.calculate_raw_tf(X_test_vec)
-        tf_norm = self.calculate_tf_norm(X_test_vec)
-        df, idf = self.calculate_df_idf(X_test_vec)
-
-        # Create DataFrame for export
-        tfidf_test_transposed = self.create_export_dataframe(X_test_vec, tf_norm, df, idf)
-
-        # Export the test results to CSV
-        tfidf_test_transposed.to_csv(f'{self.result_path}/tfidf_test_with_metrics.csv', index=True)
-
-        return self.model.predict(X_test_vec)
-
-    def evaluate(self, y_test, y_pred):
-        """Evaluate the model using common metrics."""
-        results = {
-            'F1-Score': f1_score(y_test, y_pred, pos_label='positif'),
-            'Accuracy': accuracy_score(y_test, y_pred),
-            'Precision': precision_score(y_test, y_pred, pos_label='positif'),
-            'Recall': recall_score(y_test, y_pred, pos_label='positif'),
-            'Confusion Matrix': confusion_matrix(y_test, y_pred)
-        }
-
-        # Export evaluation metrics to CSV
-        eval_df = pd.DataFrame.from_dict(results, orient='index', columns=['Score'])
-        eval_df.to_csv(f'{self.result_path}/evaluation_metrics.csv')
-
-        return results
-
-
-def predict(text_test: str):
-    # Load dataset
-    df = pd.read_csv(dataset_path)
-
-    # Initialize preprocessor and preprocess the comments
-    preprocessor = TextPreprocessor()
-    df['preprocessed_comment'] = df['comment'].apply(preprocessor.preprocess)
-
-    # Split the data into training and testing sets
-    X_train = df['preprocessed_comment']
-    y_train = df['label']
-
-    # Initialize classifier
-    classifier = TextClassifier()
-
-    # Train the model
-    classifier.train(X_train, y_train)
-
-    # Preprocess the input text
-    text_test_preprocessed = preprocessor.preprocess(text_test)
-
-    # Predict the label for the input text
-    prediction = classifier.predict([text_test_preprocessed])
-
-    # Return the prediction result
-    return prediction[0]
+    # Make predictions
+    prediction = classifier.predict(new_text)
+    return prediction
