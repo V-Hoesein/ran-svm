@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 import re
 import string
 from nltk.tokenize import word_tokenize
@@ -10,6 +11,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn import svm
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score, confusion_matrix
+
+dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads','dataset.csv'))
+result_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads'))
 
 class TextPreprocessor:
     def __init__(self):
@@ -52,24 +56,77 @@ class TextClassifier:
         self.vectorizer = vectorizer or TfidfVectorizer()
         self.model = model or svm.SVC(random_state=0, kernel='rbf')
 
+    def calculate_tf(self, X_train_vec):
+        """Calculate Term Frequency (TF) without normalization."""
+        return X_train_vec.toarray()
+
+    def calculate_tf_norm(self, X_train_vec):
+        """Calculate Term Frequency Normalized (TF Norm)."""
+        tf_array = X_train_vec.toarray()
+        tf_norm = tf_array / np.linalg.norm(tf_array, axis=1, keepdims=True)  # Normalized TF
+        return tf_norm
+
+    def calculate_df_idf(self, X_train_vec):
+        """Calculate Document Frequency (DF) and Inverse Document Frequency (IDF)."""
+        df = np.sum(X_train_vec.toarray() > 0, axis=0)  # Count of documents containing each term (DF)
+        idf = np.log((1 + X_train_vec.shape[0]) / (1 + df)) + 1  # Calculate IDF
+        return df, idf
+
+    def create_export_dataframe(self, X_vec, tf_norm, df, idf):
+        """Create DataFrame for exporting TF, TFNorm, DF, IDF, and TF-IDF."""
+        # Get TF, DF, and IDF values
+        tf_array = X_vec.toarray()
+        tfidf_array = tf_array * idf  # Calculate TF-IDF by multiplying TF with IDF
+
+        # Create DataFrame with Terms as rows
+        tfidf_df = pd.DataFrame(tf_array, columns=self.vectorizer.get_feature_names_out())
+        tfidf_transposed = tfidf_df.T  # Transpose the TF matrix
+        
+        # Add extra columns: TF Norm, DF, IDF, TF-IDF
+        tfidf_transposed['TFNorm'] = tf_norm.sum(axis=0)  # Sum TF Norm across all documents for each term
+        tfidf_transposed['DF'] = df  # Document Frequency
+        tfidf_transposed['IDF'] = idf  # Inverse Document Frequency
+        tfidf_transposed['TFIDF'] = tfidf_array.sum(axis=0)  # Sum TF-IDF values for each term
+
+        # Set the document names as columns
+        tfidf_transposed.columns = [f'D{i+1}' for i in range(X_vec.shape[0])] + ['TFNorm', 'DF', 'IDF', 'TFIDF']
+        tfidf_transposed.index.name = 'Terms'  # Set the index name as 'Terms'
+
+        return tfidf_transposed
+
     def train(self, X_train, y_train):
         """Train the model with the training data."""
         X_train_vec = self.vectorizer.fit_transform(X_train)
 
-        # Export the TF-IDF matrix
-        tfidf_df = pd.DataFrame(X_train_vec.toarray(), columns=self.vectorizer.get_feature_names_out())
-        tfidf_df.to_csv('tfidf_train.csv', index=False)
-        
+        # Calculate TF, TF Norm, DF, and IDF
+        tf = self.calculate_tf(X_train_vec)
+        tf_norm = self.calculate_tf_norm(X_train_vec)
+        df, idf = self.calculate_df_idf(X_train_vec)
+
+        # Create DataFrame for export
+        tfidf_train_transposed = self.create_export_dataframe(X_train_vec, tf_norm, df, idf)
+
+        # Export the training results to CSV
+        tfidf_train_transposed.to_csv(f'{result_path}/tfidf_train_with_metrics.csv', index=True)
+
+        # Train the model
         self.model.fit(X_train_vec, y_train)
 
     def predict(self, X_test):
         """Predict the labels of the test set."""
         X_test_vec = self.vectorizer.transform(X_test)
 
-        # Export the test TF-IDF matrix
-        tfidf_test_df = pd.DataFrame(X_test_vec.toarray(), columns=self.vectorizer.get_feature_names_out())
-        tfidf_test_df.to_csv('tfidf_test.csv', index=False)
-        
+        # Calculate TF Norm, DF, and IDF for test set
+        tf = self.calculate_tf(X_test_vec)
+        tf_norm = self.calculate_tf_norm(X_test_vec)
+        df, idf = self.calculate_df_idf(X_test_vec)
+
+        # Create DataFrame for export
+        tfidf_test_transposed = self.create_export_dataframe(X_test_vec, tf_norm, df, idf)
+
+        # Export the test results to CSV
+        tfidf_test_transposed.to_csv(f'{result_path}/tfidf_test_with_metrics.csv', index=True)
+
         return self.model.predict(X_test_vec)
 
     def evaluate(self, y_test, y_pred):
@@ -84,12 +141,10 @@ class TextClassifier:
 
         # Export evaluation metrics to CSV
         eval_df = pd.DataFrame.from_dict(results, orient='index', columns=['Score'])
-        eval_df.to_csv('evaluation_metrics.csv')
+        eval_df.to_csv(f'{result_path}/evaluation_metrics.csv')
 
         return results
 
-
-dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads','dataset.csv'))
 
 def predict(text_test: str):
     # Load dataset
@@ -117,48 +172,3 @@ def predict(text_test: str):
 
     # Return the prediction result
     return prediction[0]
-
-
-def main(text_test: str):
-    # Load dataset
-    df = pd.read_csv(dataset_path)
-
-    # Initialize preprocessor and preprocess the comments
-    preprocessor = TextPreprocessor()
-    df['preprocessed_comment'] = df['comment'].apply(preprocessor.preprocess)
-
-    # *Export preprocessed data
-    df[['comment', 'preprocessed_comment']].to_csv('preprocessed_data.csv', index=False)
-
-    # Split the data into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(df['preprocessed_comment'], df['label'], test_size=0.2, stratify=df['label'], random_state=0)
-
-    # Initialize classifier and vectorizer
-    classifier = TextClassifier()
-
-    # Train the model
-    classifier.train(X_train, y_train)
-
-    # Predict the test set
-    y_pred = classifier.predict(X_test)
-
-    # Export predicted labels
-    predictions_df = pd.DataFrame({'Actual': y_test, 'Predicted': y_pred})
-    predictions_df.to_csv('predictions.csv', index=False)
-
-    # Evaluate the model
-    results = classifier.evaluate(y_test, y_pred)
-
-    # Output the results
-    for metric, score in results.items():
-        print(f'{metric}: {score}')
-
-    new_comment = preprocessor.preprocess(text_test)
-    result = classifier.predict([new_comment])
-    
-    return 'baik'
-
-
-# if __name__ == '__main__':
-#     # main('jelek')
-#     predict('bagus')

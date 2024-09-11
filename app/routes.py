@@ -114,3 +114,4 @@ def single_classification():
         flash(f'An unexpected error occurred: {e}', 'error')
         logging.error(f"An unexpected error occurred: {e}")
         return redirect(url_for('main_routes.index'))
+
