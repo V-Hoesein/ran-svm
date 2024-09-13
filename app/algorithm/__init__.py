@@ -1,4 +1,5 @@
 import os
+import joblib
 import string
 import pandas as pd
 import numpy as np
@@ -113,13 +114,25 @@ class TextClassifier:
         prediction = self.model.predict(X_test_vectorized)
         return prediction[0]
 
-def predict(new_text:str):
+def predict(new_text: str):
     # Usage
     dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'dataset.csv'))
     result_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads'))
 
-    classifier = TextClassifier(dataset_path, result_path)
-    classifier.train_model()
+    # Model file path
+    model_file = os.path.join(result_path, 'trained_model.pkl')
+
+    # Check if the trained model already exists
+    if os.path.exists(model_file):
+        # Load the existing model
+        classifier = joblib.load(model_file)
+    else:
+        # Initialize the classifier and train the model
+        classifier = TextClassifier(dataset_path, result_path)
+        classifier.train_model()
+
+        # Save the trained model for future use
+        joblib.dump(classifier, model_file)
 
     # Make predictions
     prediction = classifier.predict(new_text)

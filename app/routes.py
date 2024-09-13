@@ -97,7 +97,7 @@ def delete_all_files():
 @main_routes.route('/single_classification', methods=['POST'])
 def single_classification():
     try:
-        clear_uploads_folder()
+        # clear_uploads_folder()
         text = request.form.get('text')
         
         result = predict(text)
