@@ -58,51 +58,57 @@ class TextClassifier:
         return tf
     
     def train_model(self):
-        # Fit the vectorizer on training data
-        X_train = self.vectorizer.fit_transform(self.df_comments['preprocess'])
-        y_train = self.df_comments['label']
-        
-        # Get TF-IDF terms and IDF values
-        terms = self.vectorizer.get_feature_names_out()
+        # Fit the vectorizer on training data to get IDF values
+        self.vectorizer.fit(self.df_comments['preprocess'])
         idf_values = self.vectorizer.idf_
         
-        # Create DataFrame for TF-IDF
-        tfidf_df = pd.DataFrame(X_train.toarray().T, index=terms, columns=[f'D{i+1}' for i in range(len(self.df_comments['preprocess']))])
-        idf_df = pd.DataFrame(idf_values, index=terms, columns=["IDF"])
+        # Get the terms (features) from the vectorizer
+        terms = self.vectorizer.get_feature_names_out()
         
-        # Compute raw TF for each document
+        # Compute raw TF and normalized TF for each document
         raw_tf_dicts = [self.compute_raw_tf(doc) for doc in self.df_comments['preprocess']]
-        raw_tf_df = pd.DataFrame(raw_tf_dicts, index=[f'D{i+1}' for i in range(len(self.df_comments['preprocess']))]).T
-        
-        # Compute normalized TF for each document
         tf_dicts = [self.compute_tf(doc) for doc in self.df_comments['preprocess']]
+        
+        raw_tf_df = pd.DataFrame(raw_tf_dicts, index=[f'D{i+1}' for i in range(len(self.df_comments['preprocess']))]).T
         tf_df = pd.DataFrame(tf_dicts, index=[f'D{i+1}' for i in range(len(self.df_comments['preprocess']))]).T
         
         # Fill NaN values with 0
         raw_tf_df = raw_tf_df.fillna(0)
         tf_df = tf_df.fillna(0)
-        idf_df = idf_df.fillna(0)
-        tfidf_df = tfidf_df.fillna(0)
         
-        # Sum all normalized TF values across all documents
-        tf_norm_all = tf_df.sum(axis=1)
+        # Create DataFrame for IDF values
+        idf_df = pd.DataFrame(idf_values, index=terms, columns=["IDF"])
         
-        # Compute Document Frequency (DF)
+        # Compute Document Frequency (DF) - number of documents where the term appears
         df_values = (raw_tf_df > 0).sum(axis=1)
         
         # Create final DataFrame
         final_df = pd.DataFrame(index=terms)
         final_df['Terms'] = terms
-        final_df = final_df.join(raw_tf_df.add_prefix('TF'))
-        final_df = final_df.join(tf_df.add_prefix('TFN'))
-        final_df['TFNAll'] = tf_norm_all
+        
+        # Add raw TF and normalized TF to final DataFrame
+        final_df = final_df.join(raw_tf_df.add_prefix('TF'))  # Add raw term counts for each document
+        final_df = final_df.join(tf_df.add_prefix('TFN'))  # Add normalized TF for each document
+        
+        # Add Document Frequency (DF)
         final_df['DF'] = df_values
+        
+        # Add IDF values
         final_df['IDF'] = idf_df['IDF']
-        final_df = final_df.join(tfidf_df.add_prefix('TFIDF_'))
+        
+        # Compute manual TF-IDF (TFN * IDF)
+        for doc in [f'D{i+1}' for i in range(len(self.df_comments['preprocess']))]:
+            final_df[f'TFIDF_{doc}'] = final_df[f'TFN{doc}'] * final_df['IDF']
+        
+        # Round all numeric columns to 3 decimal places
         final_df = final_df.round(3)
         
         # Export final DataFrame to CSV
         final_df.to_csv(f'{self.result_path}/train_metrics.csv', index=False)
+        
+        # Train SVM model using vectorized data
+        X_train = self.vectorizer.transform(self.df_comments['preprocess'])
+        y_train = self.df_comments['label']
         
         # Train the SVM model
         self.model = SVC(random_state=0, kernel='linear')
@@ -113,6 +119,7 @@ class TextClassifier:
         X_test_vectorized = self.vectorizer.transform([X_test])
         prediction = self.model.predict(X_test_vectorized)
         return prediction[0]
+
 
 def predict(new_text: str):
     # Usage
