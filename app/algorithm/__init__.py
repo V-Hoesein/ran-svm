@@ -1,36 +1,23 @@
 import os
-import joblib
 import string
 import pandas as pd
 import numpy as np
 import re
+from collections import Counter
 from nltk.tokenize import word_tokenize
 from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
 from Sastrawi.StopWordRemover.StopWordRemoverFactory import StopWordRemoverFactory
 from nltk.corpus import stopwords
-from sklearn.feature_extraction.text import TfidfVectorizer
-from collections import Counter
-from sklearn.svm import SVC
+import joblib
 
-class TextClassifier:
-    def __init__(self, dataset_path, result_path):
-        self.dataset_path = dataset_path
-        self.result_path = result_path
-        
+class TFIDFProcessor:
+    def __init__(self):
         # Initialize Sastrawi tools
         self.stemmer = StemmerFactory().create_stemmer()
         stopword_factory = StopWordRemoverFactory()
         self.combined_stopwords = set(stopword_factory.get_stop_words()).union(set(stopwords.words('english')))
-        
-        # Load dataset
-        self.df_comments = pd.read_csv(self.dataset_path)
-        
-        # Preprocess text
-        self.df_comments['preprocess'] = self.df_comments['comment'].apply(self.preprocess_text)
-        
-        # Initialize TF-IDF Vectorizer
-        self.vectorizer = TfidfVectorizer()
-    
+        self.terms = None  # To store terms after processing corpus
+
     def clean_text(self, text):
         text = text.translate(str.maketrans('', '', string.punctuation))
         text = re.sub(r'\d+', '', text)
@@ -44,7 +31,7 @@ class TextClassifier:
         tokens = [word for word in tokens if word not in self.combined_stopwords]
         stemmed = [self.stemmer.stem(word) for word in tokens]
         return ' '.join(stemmed)
-    
+
     def compute_raw_tf(self, doc):
         words = doc.split()
         count = Counter(words)
@@ -54,51 +41,134 @@ class TextClassifier:
         words = doc.split()
         count = Counter(words)
         total_terms = len(words)
-        tf = {term: count[term] / total_terms for term in count}
+        tf = {term: float(count[term]) / total_terms for term in count}
         return tf
-    
-    def train_model(self):
-        # Fit the vectorizer on training data to get IDF values
-        self.vectorizer.fit(self.df_comments['preprocess'])
-        idf_values = self.vectorizer.idf_
+
+    def compute_idf(self, corpus):
+        N = len(corpus)
+        idf_dict = {}
+        all_words = set(word for doc in corpus for word in doc.split())
         
-        # Get the terms (features) from the vectorizer
-        terms = self.vectorizer.get_feature_names_out()
+        for word in all_words:
+            containing_docs = sum(1 for doc in corpus if word in doc.split())
+            idf_dict[word] = float(np.log((1+N) / (1 + containing_docs))+1)  # Make sure IDF is a float
         
-        # Compute raw TF and normalized TF for each document
-        raw_tf_dicts = [self.compute_raw_tf(doc) for doc in self.df_comments['preprocess']]
-        tf_dicts = [self.compute_tf(doc) for doc in self.df_comments['preprocess']]
+        return idf_dict
+
+    def compute_tfidf(self, tf_dict, idf_dict):
+        tfidf_dict = {}
+        for word, tf_value in tf_dict.items():
+            tfidf_dict[word] = float(tf_value) * float(idf_dict.get(word, 0.0))  # Ensure both are floats
         
-        raw_tf_df = pd.DataFrame(raw_tf_dicts, index=[f'D{i+1}' for i in range(len(self.df_comments['preprocess']))]).T
-        tf_df = pd.DataFrame(tf_dicts, index=[f'D{i+1}' for i in range(len(self.df_comments['preprocess']))]).T
+        return tfidf_dict
+
+    def process_corpus(self, corpus):
+        # Compute IDF for the corpus
+        idf_values = self.compute_idf(corpus)
+        
+        # Get the terms (features)
+        self.terms = sorted(idf_values.keys())
+        
+        # Compute raw TF, normalized TF, and TF-IDF for each document
+        raw_tf_dicts = [self.compute_raw_tf(doc) for doc in corpus]
+        tf_dicts = [self.compute_tf(doc) for doc in corpus]
+        
+        # Ensure each document's TF-IDF vector contains all terms
+        tfidf_dicts = []
+        for tf_dict in tf_dicts:
+            tfidf_dict = {}
+            for term in self.terms:
+                tfidf_dict[term] = tf_dict.get(term, 0) * idf_values.get(term, 0)
+            tfidf_dicts.append(tfidf_dict)
+        
+        # Convert dictionaries to DataFrames for easy manipulation and export
+        raw_tf_df = pd.DataFrame(raw_tf_dicts, index=[f'D{i+1}' for i in range(len(corpus))]).T
+        tf_df = pd.DataFrame(tf_dicts, index=[f'D{i+1}' for i in range(len(corpus))]).T
+        tfidf_df = pd.DataFrame(tfidf_dicts, index=[f'D{i+1}' for i in range(len(corpus))]).T
         
         # Fill NaN values with 0
         raw_tf_df = raw_tf_df.fillna(0)
         tf_df = tf_df.fillna(0)
+        tfidf_df = tfidf_df.fillna(0)
         
-        # Create DataFrame for IDF values
-        idf_df = pd.DataFrame(idf_values, index=terms, columns=["IDF"])
+        return self.terms, raw_tf_df, tf_df, tfidf_df, idf_values
+
+
+class SVMClassifier:
+    def __init__(self):
+        self.weights = None
+        self.bias = None
+
+    def train_svm(self, X_train, y_train, lr=0.001, epochs=1000, C=1.0):
+        """
+        Train a linear SVM using gradient descent.
+
+        Parameters:
+        - X_train: Training feature matrix
+        - y_train: Training labels
+        - lr: Learning rate
+        - epochs: Number of iterations
+        - C: Regularization parameter
+        """
+        num_samples, num_features = X_train.shape
+        weights = np.zeros(num_features)
+        bias = 0
+
+        # Gradient descent for SVM
+        for epoch in range(epochs):
+            for i in range(num_samples):
+                condition = y_train[i] * (np.dot(X_train[i], weights) - bias) >= 1
+                if condition:
+                    weights -= lr * (2 * C * weights)  # Regularization term
+                else:
+                    weights -= lr * (2 * C * weights - np.dot(X_train[i], y_train[i]))
+                    bias -= lr * y_train[i]
         
-        # Compute Document Frequency (DF) - number of documents where the term appears
+        self.weights, self.bias = weights, bias
+
+    def predict(self, X):
+        """
+        Predict the label of a given input vector X using the learned weights and bias.
+        """
+        linear_output = np.dot(X, self.weights) - self.bias
+        return np.sign(linear_output)  # Predict either 1 or -1 based on the sign of the linear output
+
+
+class TextClassifier:
+    def __init__(self, dataset_path, result_path):
+        self.dataset_path = dataset_path
+        self.result_path = result_path
+        
+        # Initialize processors
+        self.tfidf_processor = TFIDFProcessor()
+        self.svm_classifier = SVMClassifier()
+        
+        # Load dataset
+        self.df_comments = pd.read_csv(self.dataset_path)
+        
+        # Preprocess text
+        self.df_comments['preprocess'] = self.df_comments['comment'].apply(self.tfidf_processor.preprocess_text)
+
+    def train_model(self):
+        # Preprocess all text in the dataset
+        corpus = self.df_comments['preprocess'].tolist()
+        
+        # Process corpus for TF-IDF
+        self.terms, raw_tf_df, tf_df, tfidf_df, idf_values = self.tfidf_processor.process_corpus(corpus)
+        
+        # Create Document Frequency (DF)
         df_values = (raw_tf_df > 0).sum(axis=1)
         
         # Create final DataFrame
-        final_df = pd.DataFrame(index=terms)
-        final_df['Terms'] = terms
-        
-        # Add raw TF and normalized TF to final DataFrame
+        final_df = pd.DataFrame(index=self.terms)
+        final_df['Terms'] = self.terms
         final_df = final_df.join(raw_tf_df.add_prefix('TF'))  # Add raw term counts for each document
         final_df = final_df.join(tf_df.add_prefix('TFN'))  # Add normalized TF for each document
+        final_df = final_df.join(tfidf_df.add_prefix('TFIDF'))  # Add TF-IDF for each document
         
-        # Add Document Frequency (DF)
+        # Add Document Frequency (DF) and IDF values
         final_df['DF'] = df_values
-        
-        # Add IDF values
-        final_df['IDF'] = idf_df['IDF']
-        
-        # Compute manual TF-IDF (TFN * IDF)
-        for doc in [f'D{i+1}' for i in range(len(self.df_comments['preprocess']))]:
-            final_df[f'TFIDF_{doc}'] = final_df[f'TFN{doc}'] * final_df['IDF']
+        final_df['IDF'] = [idf_values.get(term, 0) for term in self.terms]
         
         # Round all numeric columns to 3 decimal places
         final_df = final_df.round(3)
@@ -106,23 +176,26 @@ class TextClassifier:
         # Export final DataFrame to CSV
         final_df.to_csv(f'{self.result_path}/train_metrics.csv', index=False)
         
-        # Train SVM model using vectorized data
-        X_train = self.vectorizer.transform(self.df_comments['preprocess'])
-        y_train = self.df_comments['label']
+        # Prepare training data for SVM
+        X_train = np.array([list(tfidf_df.loc[:, f'D{i+1}']) for i in range(len(corpus))])
+        y_train = self.df_comments['label'].values
         
-        # Train the SVM model
-        self.model = SVC(random_state=0, kernel='linear')
-        self.model.fit(X_train, y_train)
-    
-    def predict(self, text_test: str):
-        X_test = self.preprocess_text(text_test)
-        X_test_vectorized = self.vectorizer.transform([X_test])
-        prediction = self.model.predict(X_test_vectorized)
-        return prediction[0]
+        # Train SVM manually
+        self.svm_classifier.train_svm(X_train, y_train)
+
+    def predict(self, text_test):
+        preprocessed_text = self.tfidf_processor.preprocess_text(text_test)
+        test_tf = self.tfidf_processor.compute_tf(preprocessed_text)
+        
+        # Make sure the prediction uses the same set of terms
+        idf_values = self.tfidf_processor.compute_idf([preprocessed_text])
+        test_tfidf = {term: test_tf.get(term, 0) * idf_values.get(term, 0) for term in self.tfidf_processor.terms}
+        test_vector = np.array([test_tfidf.get(term, 0) for term in self.tfidf_processor.terms])
+        
+        return self.svm_classifier.predict(test_vector)
 
 
 def predict(new_text: str):
-    # Usage
     dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'dataset.csv'))
     result_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads'))
 
@@ -133,14 +206,20 @@ def predict(new_text: str):
     if os.path.exists(model_file):
         # Load the existing model
         classifier = joblib.load(model_file)
+        prediction = classifier.predict(new_text)
     else:
-        # Initialize the classifier and train the model
+        # Train and save the model if not exist
         classifier = TextClassifier(dataset_path, result_path)
         classifier.train_model()
-
-        # Save the trained model for future use
         joblib.dump(classifier, model_file)
 
-    # Make predictions
-    prediction = classifier.predict(new_text)
+        prediction = classifier.predict(new_text)
+        print(prediction)
+
+    
+    if prediction > 0.0 :
+        prediction = 'positif'
+    else:
+        prediction = 'negatif'
+        
     return prediction
