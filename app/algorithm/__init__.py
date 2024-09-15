@@ -133,6 +133,19 @@ class SVMClassifier:
         linear_output = np.dot(X, self.weights) - self.bias
         return np.sign(linear_output)  # Predict either 1 or -1 based on the sign of the linear output
 
+    def compute_decision_values(self, X):
+        """
+        Compute decision values for each document in X.
+        """
+        decision_values = np.dot(X, self.weights) - self.bias
+        return decision_values
+
+    def get_weights_bias(self):
+        """
+        Get the weights and bias.
+        """
+        return self.weights, self.bias
+
 
 class TextClassifier:
     def __init__(self, dataset_path, result_path):
@@ -183,6 +196,18 @@ class TextClassifier:
         # Train SVM manually
         self.svm_classifier.train_svm(X_train, y_train)
 
+        # Compute decision values
+        decision_values = self.svm_classifier.compute_decision_values(X_train)
+        
+        # Export decision values to CSV
+        decision_values_df = pd.DataFrame(decision_values, index=[f'D{i+1}' for i in range(len(corpus))], columns=['DecisionValue'])
+        decision_values_df.to_csv(f'{self.result_path}/decision_values.csv', index=True)
+
+        # Export weights and bias to CSV
+        weights, bias = self.svm_classifier.get_weights_bias()
+        weights_bias_df = pd.DataFrame({'Weights': weights, 'Bias': [bias] * len(weights)}, index=[f'Feature{i+1}' for i in range(len(weights))])
+        weights_bias_df.to_csv(f'{self.result_path}/weights_bias.csv', index=True)
+
     def predict(self, text_test):
         preprocessed_text = self.tfidf_processor.preprocess_text(text_test)
         test_tf = self.tfidf_processor.compute_tf(preprocessed_text)
@@ -216,8 +241,7 @@ def predict(new_text: str):
         prediction = classifier.predict(new_text)
         print(prediction)
 
-    
-    if prediction > 0.0 :
+    if prediction > 0.0:
         prediction = 'positif'
     else:
         prediction = 'negatif'
