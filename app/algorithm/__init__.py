@@ -99,7 +99,7 @@ class SVMClassifier:
         self.weights = None
         self.bias = None
 
-    def train_svm(self, X_train, y_train, lr=0.001, epochs=1000, C=1.0):
+    def train_svm(self, X_train, y_train, lr=0.001, epochs=1000, C=0.1):
         """
         Train a linear SVM using gradient descent.
 
