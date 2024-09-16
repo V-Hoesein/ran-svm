@@ -10,6 +10,9 @@ from Sastrawi.StopWordRemover.StopWordRemoverFactory import StopWordRemoverFacto
 from nltk.corpus import stopwords
 import joblib
 
+dataset_path = os.path.realpath(os.path.join(os.path.dirname(__name__), '..', 'app','static','uploads', 'dataset.csv'))
+result_path = os.path.realpath(os.path.join(os.path.dirname(__name__), '..', 'notebook', 'result'))
+
 class TFIDFProcessor:
     def __init__(self):
         # Initialize Sastrawi tools
