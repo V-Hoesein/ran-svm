@@ -1,5 +1,6 @@
 import numpy as np
-import joblib  # Pastikan untuk menginstal joblib dengan pip install joblib
+import joblib
+import csv
 
 class SVM:
     def __init__(self, learning_rate=0.01, regularization_strength=0.01, n_iters=1000):
@@ -8,12 +9,16 @@ class SVM:
         self.n_iters = n_iters
         self.w = None  # Bobot
         self.b = None  # Bias
+        self.terms = None  # Daftar term
 
-    def fit(self, X, y):
+    def fit(self, X, y, terms):
         n_samples, n_features = X.shape
         # Inisialisasi bobot dan bias
         self.w = np.zeros(n_features)
         self.b = 0
+
+        # Simpan daftar term
+        self.terms = terms
 
         # Label -1 dan 1 untuk kelas negatif dan positif
         y_ = np.where(y <= 0, -1, 1)
@@ -35,6 +40,20 @@ class SVM:
         # Menghitung prediksi
         linear_output = np.dot(X, self.w) + self.b
         return np.sign(linear_output)
+
+    def export_weights_to_csv(self, filename):
+        if self.terms is None or self.w is None:
+            print("Model not trained or terms not set.")
+            return
+
+        with open(filename, 'w', newline='') as file:
+            writer = csv.writer(file)
+            # Header
+            writer.writerow(['Term', 'Weight'])
+            # Data rows
+            for term, weight in zip(self.terms, self.w):
+                writer.writerow([term, weight])
+        print(f"Weights exported to {filename}")
 
     def save_model(self, file_path):
         # Menyimpan model ke file .pkl

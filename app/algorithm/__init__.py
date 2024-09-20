@@ -4,14 +4,13 @@ from .tfidf import ManualTFIDF, TFIDFTest
 from .svm import SVM
 import pandas as pd
 import numpy as np
-import joblib  # Pastikan joblib diimpor
+import joblib
 
 # Define file paths
 dataset_path = os.path.realpath(os.path.join(os.path.dirname(__name__), 'app', 'static', 'uploads', 'dataset.csv'))
 result_path = os.path.realpath(os.path.join(os.path.dirname(__name__), 'app', 'static', 'uploads'))
 model_path = os.path.realpath(os.path.join(os.path.dirname(__name__), 'app', 'static', 'uploads', 'model.pkl'))
 tfidf_model_path = os.path.realpath(os.path.join(os.path.dirname(__name__), 'app', 'static', 'uploads', 'tfidf_model.pkl'))
-
 def predict(test_documents: list):
     # Preprocessing instance
     preprocessor = TextPreprocessor()
@@ -24,9 +23,9 @@ def predict(test_documents: list):
         # Load the trained SVM model and TF-IDF model
         svm_model.w, svm_model.b = joblib.load(model_path)
         
-        # Gunakan load_model() untuk memuat TF-IDF model
+        # Load the TF-IDF model
         tfidf_model = ManualTFIDF([])
-        tfidf_model.load_model(tfidf_model_path)  # Memastikan objek yang benar dimuat
+        tfidf_model.load_model(tfidf_model_path)
         print("Model and TF-IDF model loaded from", model_path, "and", tfidf_model_path)
     else:
         # If model does not exist, train the model
@@ -46,11 +45,12 @@ def predict(test_documents: list):
         y_train = np.array(y_tfidf)  # Convert labels to numpy array
     
         # Fit SVM model to training data
-        svm_model.fit(X_train, y_train)
+        svm_model.fit(X_train, y_train, tfidf_model.terms)  # Use terms from the TF-IDF model
+        svm_model.export_weights_to_csv(f'{result_path}/decision_function.csv')
         
         # Save trained model and TF-IDF model
         joblib.dump((svm_model.w, svm_model.b), model_path)
-        tfidf_model.save_model(tfidf_model_path)  # Gunakan save_model() untuk menyimpan objek TFIDF
+        tfidf_model.save_model(tfidf_model_path)  # Save the TF-IDF model
         print("Model and TF-IDF model trained and saved to", model_path, "and", tfidf_model_path)
 
     # Process test documents with TF-IDF
@@ -66,13 +66,3 @@ def predict(test_documents: list):
     predictions = ["negatif" if p < 0 else "positif" for p in predictions]
     print("Predictions:", predictions)
     return predictions
-
-# # Test documents to classify
-# test_documents = [
-#     "jelek kali",
-# ]
-
-# # Call the predict function with test documents
-# res = predict(test_documents)
-
-# print(res)
