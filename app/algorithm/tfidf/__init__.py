@@ -154,4 +154,3 @@ class ManualTFIDF:
         self.df = model_data['df']
         self.idf = model_data['idf']
         self.tfidf_matrix = model_data['tfidf_matrix']
-        print(f"Model loaded from {filepath}")
