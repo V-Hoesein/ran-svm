@@ -100,7 +100,7 @@ def single_classification():
         # clear_uploads_folder()
         text = request.form.get('text')
         
-        result = predict(text)
+        result = predict([text])
         
         session.update({'result': result, 'text':text})
         flash('Classification successful!', 'success')
