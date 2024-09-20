@@ -64,7 +64,7 @@ class ManualTFIDF:
         return sorted(terms)
 
     def compute_tf(self):
-        # Hitung TF untuk setiap term di setiap dokumen
+    # Hitung TF untuk setiap term di setiap dokumen
         tf_matrix = []
         for doc in self.documents:
             term_count = {}
@@ -85,16 +85,17 @@ class ManualTFIDF:
     def compute_idf(self):
         # Hitung IDF berdasarkan DF
         N = len(self.documents)
-        idf = {term: math.log(N / (df + 1)) for term, df in self.df.items()}
+        idf = {term: (math.log((1 + N) / (df + 1)) + 1) for term, df in self.df.items()}
         return idf
 
     def compute_tfidf(self):
-        # Hitung TF-IDF dengan mengalikan TF dan IDF
+        # Hitung TF-IDF dengan mengalikan TF Normalized dan IDF
         tfidf_matrix = []
-        for tf_doc in self.tf_matrix:
+        normalized_tf = self.compute_normalized_tf()  # Ambil nilai TF Normalized
+        for norm_tf_doc in normalized_tf:
             tfidf_doc = {}
-            for term in tf_doc.keys():
-                tfidf_doc[term] = (tf_doc[term] / len(self.documents)) * self.idf[term]  # TF-Normalized
+            for term in norm_tf_doc.keys():
+                tfidf_doc[term] = norm_tf_doc[term] * self.idf[term]  # Mengalikan TF Normalized dengan IDF
             tfidf_matrix.append(tfidf_doc)
         return tfidf_matrix
 
@@ -103,11 +104,12 @@ class ManualTFIDF:
         normalized_tf_matrix = []
         for tf_doc in self.tf_matrix:
             tf_norm_doc = {}
-            max_tf = max(tf_doc.values()) if tf_doc else 1
+            total_terms = sum(tf_doc.values()) if tf_doc else 1
             for term in tf_doc.keys():
-                tf_norm_doc[term] = tf_doc[term] / max_tf if max_tf > 0 else 0
+                tf_norm_doc[term] = tf_doc[term] / total_terms if total_terms > 0 else 0
             normalized_tf_matrix.append(tf_norm_doc)
         return normalized_tf_matrix
+
 
     def export_to_csv(self, filename):
         normalized_tf = self.compute_normalized_tf()
@@ -118,6 +120,7 @@ class ManualTFIDF:
             header += [f'TFD{i + 1}' for i in range(len(self.documents))]
             header += [f'TFNorm{i + 1}' for i in range(len(self.documents))]
             header.append('DF')
+            header.append('IDF')  # Add IDF to the header
             header += [f'TFIDF{i + 1}' for i in range(len(self.documents))]
             writer.writerow(header)
 
@@ -127,8 +130,10 @@ class ManualTFIDF:
                 row += [self.tf_matrix[doc_idx][term] for doc_idx in range(len(self.documents))]
                 row += [normalized_tf[doc_idx][term] for doc_idx in range(len(self.documents))]
                 row.append(self.df[term])
+                row.append(self.idf[term])  # Add IDF value for the term
                 row += [self.tfidf_matrix[doc_idx][term] for doc_idx in range(len(self.documents))]
                 writer.writerow(row)
+
 
     def get_tfidf_matrix(self):
         # Mengembalikan matriks TF-IDF sebagai numpy array
