@@ -3,9 +3,6 @@ import joblib  # Pastikan untuk menginstal joblib dengan pip install joblib
 
 class SVM:
     def __init__(self, learning_rate=0.01, regularization_strength=0.01, n_iters=1000):
-        print("Initializing SVM with learning rate:", learning_rate, 
-              "regularization strength:", regularization_strength, 
-              "and number of iterations:", n_iters)
         self.lr = learning_rate
         self.reg_strength = regularization_strength
         self.n_iters = n_iters
@@ -13,7 +10,6 @@ class SVM:
         self.b = None  # Bias
 
     def fit(self, X, y):
-        print("Fitting the SVM model...")
         n_samples, n_features = X.shape
         # Inisialisasi bobot dan bias
         self.w = np.zeros(n_features)
@@ -34,18 +30,12 @@ class SVM:
                     # Jika tidak terpenuhi, update bobot dan bias
                     self.w -= self.lr * (2 * self.reg_strength * self.w - np.dot(x_i, y_[idx]))
                     self.b -= self.lr * y_[idx]
-        print("Model fitting completed.")
 
     def predict(self, X):
-        print("Making predictions...")
         # Menghitung prediksi
         linear_output = np.dot(X, self.w) + self.b
-        predictions = np.sign(linear_output)
-        print("Predictions made:", predictions)
-        return predictions
+        return np.sign(linear_output)
 
     def save_model(self, file_path):
-        print(f"Saving model to {file_path}...")
         # Menyimpan model ke file .pkl
         joblib.dump((self.w, self.b), file_path)
-        print("Model saved successfully.")

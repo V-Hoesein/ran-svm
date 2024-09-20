@@ -100,7 +100,12 @@ def single_classification():
         # clear_uploads_folder()
         text = request.form.get('text')
         
-        result = predict([text])
+        will_predict = [text]
+        
+        if '&&' in text:
+            will_predict = text.split('&&')
+        
+        result = predict(will_predict)
         
         session.update({'result': result, 'text':text})
         flash('Classification successful!', 'success')

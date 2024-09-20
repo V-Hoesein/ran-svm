@@ -63,10 +63,9 @@ def predict(test_documents: list):
     # Perform predictions on test documents
     predictions = svm_model.predict(X_test)
 
-    predictions = list(predictions)
+    predictions = ["negatif" if p < 0 else "positif" for p in predictions]
     print("Predictions:", predictions)
-    
-    return str(predictions)
+    return predictions
 
 # # Test documents to classify
 # test_documents = [

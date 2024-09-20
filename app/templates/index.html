@@ -38,16 +38,11 @@
     </form>
     
     {% if result %}
-    <div class="border border-double border-slate-800 py-4 px-8 uppercase text-lg shadow-md text-white rounded-md
-    {% if result == 'positif' %}
-      bg-blue-700
-    {% elif result == 'negatif' %}
-      bg-red-700
-    {% endif %}
-    ">
-      {{result}}
+    <div class="border border-double border-slate-800 py-4 px-8 uppercase text-lg shadow-md text-black rounded-md">
+        {{ result }}
     </div>
-    {% endif %}
+{% endif %}
+
   </section>
 
   <!-- Loading Screen -->
