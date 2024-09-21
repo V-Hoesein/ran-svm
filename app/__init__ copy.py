@@ -1,40 +1,138 @@
-import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
+import csv
+import os
+import math
+from collections import Counter
+import string
+import re
+from nltk.tokenize import word_tokenize
+from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
+from Sastrawi.StopWordRemover.StopWordRemoverFactory import StopWordRemoverFactory
+from nltk.corpus import stopwords
 
-# Contoh data latih
-train_docs = [
-    "Saya suka komputer",
-    "Komputer dan laptop bagus",
-    "Saya belajar dengan laptop dan komputer"
-]
 
-# Contoh data uji (teks baru)
-new_text = "Suka komputer dan belajar"
+class TextCleaner:
+    def __init__(self):
+        self.stemmer = StemmerFactory().create_stemmer()
+        stopword_factory = StopWordRemoverFactory()
+        self.combined_stopwords = set(stopword_factory.get_stop_words()).union(set(stopwords.words('english')))
 
-# Membuat dan melatih TF-IDF Vectorizer menggunakan data latih
-vectorizer = TfidfVectorizer()
+    def clean_text(self, text):
+        text = text.translate(str.maketrans('', '', string.punctuation))
+        text = re.sub(r'\d+', '', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        text = re.sub(r'[^a-zA-Z\s]', '', text)
+        return text
 
-# Melakukan fit pada data latih untuk mendapatkan kosakata dan IDF
-X_train = vectorizer.fit_transform(train_docs)
+    def preprocess_text(self, text):
+        text = self.clean_text(text).lower()
+        tokens = word_tokenize(text)
+        tokens = [word for word in tokens if word not in self.combined_stopwords]
+        stemmed = [self.stemmer.stem(word) for word in tokens]
+        return ' '.join(stemmed)
 
-# Menampilkan kosakata yang dipelajari oleh vectorizer
-print("Kosakata (Terms):")
-print(vectorizer.get_feature_names_out())
 
-# Menghitung nilai IDF untuk setiap kata
-idf_values = vectorizer.idf_
-print("\nNilai IDF untuk setiap term:")
-idf_df = pd.DataFrame({'Terms': vectorizer.get_feature_names_out(), 'IDF': idf_values})
-print(idf_df)
+class TFIDFCalculator:
+    def __init__(self, input_file, output_file, text_cleaner):
+        self.input_file = input_file
+        self.output_file = output_file
+        self.text_cleaner = text_cleaner
+        self.documents = []
+        self.terms = set()
 
-# Melakukan transformasi pada teks baru menggunakan vectorizer yang sudah dilatih
-X_new_text = vectorizer.transform([new_text])
+    def load_data(self):
+        with open(self.input_file, 'r') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                cleaned_text = self.text_cleaner.preprocess_text(row['comment'])
+                self.documents.append(cleaned_text)
+        self.terms = set(' '.join(self.documents).split())
 
-# Mengambil nilai TF-IDF dari teks baru
-print("\nTF-IDF untuk teks baru:")
-tfidf_new_text = pd.DataFrame(X_new_text.T.toarray(), index=vectorizer.get_feature_names_out(), columns=["TF-IDF"])
-print(tfidf_new_text)
+    def calculate_tf(self):
+        term_frequencies = []
+        for doc in self.documents:
+            counter = Counter(doc.split())
+            tf_raw = {term: counter.get(term, 0) for term in self.terms}
+            total_terms = sum(counter.values())
+            tf_norm = {term: round(count / total_terms, 4) for term, count in tf_raw.items()}
+            tf_raw = {term: round(count, 4) for term, count in tf_raw.items()}
+            term_frequencies.append((tf_raw, tf_norm))
+        return term_frequencies
 
-# Mengekspor hasil TF-IDF dari teks baru ke file CSV
-tfidf_new_text.to_csv('tfidf_new_text.csv', index=True)
-print("\nNilai TF-IDF teks baru diekspor ke tfidf_new_text.csv")
+    def calculate_df(self):
+        df = {term: 0 for term in self.terms}
+        for doc in self.documents:
+            doc_terms = set(doc.split())
+            for term in doc_terms:
+                df[term] += 1
+        return df
+
+    def calculate_idf(self, df):
+        num_docs = len(self.documents)
+        idf = {term: round(math.log((1 + num_docs) / (1+df[term]))+1, 4) for term in self.terms}
+        return idf
+
+    def calculate_tfidf(self, term_frequencies, idf):
+        tfidf = []
+        tfidf_norm = []
+        
+        for tf_raw, tf_norm in term_frequencies:
+            # Calculate unnormalized TF-IDF using tf_norm
+            tfidf_doc = {term: round(tf_norm[term] * idf[term], 4) for term in self.terms}
+            tfidf.append(tfidf_doc)
+
+            # Calculate L2 norm for normalization
+            norm = math.sqrt(sum(value**2 for value in tfidf_doc.values()))
+            
+            # Normalize using L2 norm
+            if norm != 0:
+                tfidf_norm_doc = {term: round(value / norm, 4) for term, value in tfidf_doc.items()}
+            else:
+                tfidf_norm_doc = {term: 0 for term in self.terms}
+            
+            tfidf_norm.append(tfidf_norm_doc)
+        
+        return tfidf, tfidf_norm
+
+
+    def export_results(self, term_frequencies, df, idf, tfidf, tfidf_norm):
+        with open(self.output_file, 'w', newline='') as file:
+            writer = csv.writer(file)
+            header = ['Term'] + [f'TF{i + 1}' for i in range(len(self.documents))] + \
+                    [f'TFN{i + 1}' for i in range(len(self.documents))] + ['DF', 'IDF'] + \
+                    [f'TFIDF{i + 1}' for i in range(len(self.documents))] + \
+                    [f'TFIDFN{i + 1}' for i in range(len(self.documents))]
+
+            writer.writerow(header)
+
+            # Sort the terms in ascending order
+            sorted_terms = sorted(self.terms)
+
+            for term in sorted_terms:
+                row = [term]
+                for doc_tf in term_frequencies:
+                    row.append(doc_tf[0][term])
+                for doc_tf in term_frequencies:
+                    row.append(doc_tf[1][term])
+                row.append(df[term])
+                row.append(idf[term])
+                for doc_tfidf in tfidf:
+                    row.append(doc_tfidf[term])
+                for doc_tfidf_norm in tfidf_norm:
+                    row.append(doc_tfidf_norm[term])
+                writer.writerow(row)
+
+    def process(self):
+        self.load_data()
+        term_frequencies = self.calculate_tf()
+        df = self.calculate_df()
+        idf = self.calculate_idf(df)
+        tfidf, tfidf_norm = self.calculate_tfidf(term_frequencies, idf)
+        self.export_results(term_frequencies, df, idf, tfidf, tfidf_norm)
+
+# Example usage:
+dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'dataset.csv'))
+result_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'result.csv'))
+
+text_cleaner = TextCleaner()
+tfidf_calculator = TFIDFCalculator(dataset_path, result_path, text_cleaner)
+tfidf_calculator.process()
