@@ -58,6 +58,7 @@ class TFIDFVectorizer:
 
         # Create final DataFrame
         final_df = pd.DataFrame(index=terms)
+        final_df['Term'] = terms  # Add 'Term' column
         final_df['DF'] = df_values
         final_df['IDF'] = idf_df['IDF']
 
@@ -70,17 +71,6 @@ class TFIDFVectorizer:
             final_df[f'TFIDF_{doc}'] = final_df[f'TFN{doc}'] * final_df['IDF']
 
         return final_df.round(3)
-
-    def compute_raw_tf(self, doc):
-        words = doc.split()
-        return Counter(words)
-
-    def compute_tf(self, doc):
-        words = doc.split()
-        count = Counter(words)
-        total_terms = len(words)
-        return {term: count[term] / total_terms for term in count}
-
 
 import joblib
 import os
