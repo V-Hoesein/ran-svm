@@ -13,6 +13,8 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.svm import SVC
 import joblib
 
+from sklearn.feature_extraction.text import TfidfVectorizer
+
 class TextCleaner:
     def __init__(self):
         self.stemmer = StemmerFactory().create_stemmer()
@@ -26,7 +28,7 @@ class TextCleaner:
         text = re.sub(r'[^a-zA-Z\s]', '', text)
         return text
 
-    def preprocess_text(self, text):
+    def preprocess_text(self, text) -> str:
         text = self.clean_text(text).lower()
         tokens = word_tokenize(text)
         tokens = [word for word in tokens if word not in self.combined_stopwords]
@@ -134,9 +136,10 @@ class TFIDFCalculator:
         return tfidf_norm
 
 
+#* Fungsi untuk generate csv metriks tfidf dan svm model
 def train_model():
     dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'dataset.csv'))
-    result_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'result.csv'))
+    result_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'tfidf.csv'))
     model_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'model.pkl'))
     
     # Mengambil label pada dataset csv
@@ -157,11 +160,44 @@ def train_model():
     y = encoder.fit_transform(documents_sentiment)
 
     # Membuat Model SVM / Train
-    model = SVC()
+    model = SVC(kernel='linear')
 
     model.fit(X,y)
 
     joblib.dump(model, model_path)
     
+
+def predict(test_text:str):
+    # Load dataset
+    dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'dataset.csv'))
+    data = pd.read_csv(dataset_path)
+    raw_data = list(data['comment'])
+
+    preprocessor = TextCleaner()
+    data_train = [preprocessor.preprocess_text(raw) for raw in raw_data]
+
+    # Vectorization
+    vectorizer = TfidfVectorizer()
+    tfidf_matrix = vectorizer.fit_transform(data_train)
+
+    # Convert to DataFrame
+    terms = vectorizer.get_feature_names_out()  # Get terms from the vectorizer
+    tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), columns=terms)
+
+    # Save to CSV in ascending order by term
+    tfidf_df_sorted = tfidf_df.sort_index(axis=1)
+    tfidf_df_sorted.to_csv('tfidf_from_lib.csv', index=False)
+
+    # !prepare data testing
+    data_test = preprocessor.preprocess_text(test_text)
+
+    # FIT data testing
+    tfidf_matrix_test = vectorizer.transform([data_test])
     
-train_model()
+    tfidf_df_test = pd.DataFrame(tfidf_matrix_test.toarray(), columns=terms)
+    
+    # Save to CSV in ascending order by term
+    tfidf_df_sorted_test = tfidf_df_test.sort_index(axis=1)
+    tfidf_df_sorted_test.to_csv('tfidf_fit_from_lib.csv', index=False)
+    
+predict('cantiknya tasya farasya kebangetan.??semoga sehat selalu')
