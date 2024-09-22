@@ -167,7 +167,7 @@ def train_model():
     joblib.dump(model, model_path)
     
 
-def predict(test_text:str):
+def predict(test_text: str):
     # Load dataset
     dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'dataset.csv'))
     data = pd.read_csv(dataset_path)
@@ -181,10 +181,10 @@ def predict(test_text:str):
     tfidf_matrix = vectorizer.fit_transform(data_train)
 
     # Convert to DataFrame
-    terms = vectorizer.get_feature_names_out()  # Get terms from the vectorizer
+    terms = vectorizer.get_feature_names_out()
     tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), columns=terms)
 
-    # Save to CSV in ascending order by term
+    # Save to CSV
     tfidf_df_sorted = tfidf_df.sort_index(axis=1)
     tfidf_df_sorted.to_csv('tfidf_from_lib.csv', index=False)
 
@@ -196,11 +196,20 @@ def predict(test_text:str):
     
     tfidf_df_test = pd.DataFrame(tfidf_matrix_test.toarray(), columns=terms)
     
-    # Save to CSV in ascending order by term and transpose
+    # Hitung TF mentah
+    raw_counts = pd.Series(data_test.split()).value_counts()
+    tf_values = [raw_counts.get(term, 0) for term in terms]
+
+    # Tambahkan kolom TF mentah
     tfidf_df_sorted_test = tfidf_df_test.sort_index(axis=1).T
-    tfidf_df_sorted_test.columns = ['TFIDFN']  # Beri nama kolom setelah transposisi
+    tfidf_df_sorted_test['TF'] = tf_values  # Tambahkan kolom TF
+
+    # Menyesuaikan urutan kolom
+    tfidf_df_sorted_test = tfidf_df_sorted_test[['TF', 0]]  # Menggunakan indeks 0 untuk TFIDFN
+
+    # Simpan ke CSV
+    tfidf_df_sorted_test.columns = ['TF', 'TFIDFN']  # Sesuaikan nama kolom
     tfidf_df_sorted_test.to_csv('tfidf_fit_from_lib.csv', index_label='Terms')
 
-
-
 predict('cantiknya tasya farasya kebangetan.??semoga sehat selalu')
+
