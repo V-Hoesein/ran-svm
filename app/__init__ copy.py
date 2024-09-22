@@ -4,11 +4,14 @@ import math
 from collections import Counter
 import string
 import re
+import pandas as pd
 from nltk.tokenize import word_tokenize
 from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
 from Sastrawi.StopWordRemover.StopWordRemoverFactory import StopWordRemoverFactory
 from nltk.corpus import stopwords
-
+from sklearn.preprocessing import LabelEncoder
+from sklearn.svm import SVC
+import joblib
 
 class TextCleaner:
     def __init__(self):
@@ -128,11 +131,37 @@ class TFIDFCalculator:
         idf = self.calculate_idf(df)
         tfidf, tfidf_norm = self.calculate_tfidf(term_frequencies, idf)
         self.export_results(term_frequencies, df, idf, tfidf, tfidf_norm)
+        return tfidf_norm
 
-# Example usage:
-dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'dataset.csv'))
-result_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'result.csv'))
 
-text_cleaner = TextCleaner()
-tfidf_calculator = TFIDFCalculator(dataset_path, result_path, text_cleaner)
-tfidf_calculator.process()
+def train_model():
+    dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'dataset.csv'))
+    result_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'result.csv'))
+    model_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'model.pkl'))
+    
+    # Mengambil label pada dataset csv
+    data_csv = pd.read_csv(dataset_path)
+    documents_sentiment = list(data_csv['label']) 
+
+    # Menghitung TFIDF
+    text_cleaner = TextCleaner()
+    
+    tfidf_calculator = TFIDFCalculator(dataset_path, result_path, text_cleaner)
+    metricts_tfidf = tfidf_calculator.process()
+
+    # Transformasi array of dict tfidf kedalam dataframe
+    X = pd.DataFrame(metricts_tfidf)
+
+    # Konversi label sentimen menjadi angka 0 untuk negatif dan 1 untuk positif
+    encoder = LabelEncoder()
+    y = encoder.fit_transform(documents_sentiment)
+
+    # Membuat Model SVM / Train
+    model = SVC()
+
+    model.fit(X,y)
+
+    joblib.dump(model, model_path)
+    
+    
+train_model()
