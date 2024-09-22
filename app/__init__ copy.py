@@ -188,7 +188,7 @@ def predict(test_text:str):
     tfidf_df_sorted = tfidf_df.sort_index(axis=1)
     tfidf_df_sorted.to_csv('tfidf_from_lib.csv', index=False)
 
-    # !prepare data testing
+    # Prepare data testing
     data_test = preprocessor.preprocess_text(test_text)
 
     # FIT data testing
@@ -196,8 +196,11 @@ def predict(test_text:str):
     
     tfidf_df_test = pd.DataFrame(tfidf_matrix_test.toarray(), columns=terms)
     
-    # Save to CSV in ascending order by term
-    tfidf_df_sorted_test = tfidf_df_test.sort_index(axis=1)
-    tfidf_df_sorted_test.to_csv('tfidf_fit_from_lib.csv', index=False)
-    
+    # Save to CSV in ascending order by term and transpose
+    tfidf_df_sorted_test = tfidf_df_test.sort_index(axis=1).T
+    tfidf_df_sorted_test.columns = ['TFIDFN']  # Beri nama kolom setelah transposisi
+    tfidf_df_sorted_test.to_csv('tfidf_fit_from_lib.csv', index_label='Terms')
+
+
+
 predict('cantiknya tasya farasya kebangetan.??semoga sehat selalu')
