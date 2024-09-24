@@ -5,6 +5,8 @@ from collections import Counter
 import string
 import re
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 from nltk.tokenize import word_tokenize
 from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
 from Sastrawi.StopWordRemover.StopWordRemoverFactory import StopWordRemoverFactory
@@ -17,6 +19,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 class TextCleaner:
     def __init__(self):
+        print('===== Preprocessing =====')
         self.stemmer = StemmerFactory().create_stemmer()
         stopword_factory = StopWordRemoverFactory()
         self.combined_stopwords = set(stopword_factory.get_stop_words()).union(set(stopwords.words('english')))
@@ -38,6 +41,7 @@ class TextCleaner:
 
 class TFIDFCalculator:
     def __init__(self, input_file, output_file, text_cleaner):
+        print('===== Menghitung TFIDF Manual =====')
         self.input_file = input_file
         self.output_file = output_file
         self.text_cleaner = text_cleaner
@@ -138,6 +142,7 @@ class TFIDFCalculator:
 
 #* Fungsi untuk generate csv metriks tfidf
 def generate_csv_manual():
+    print('===== Membuat .csv =====')
     dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'dataset.csv'))
     result_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'tfidf.csv'))
     
@@ -156,24 +161,22 @@ def generate_csv_manual():
 
 #* Fungsi untuk train model SVM
 def train_model():
+    print('===== Melatih Model =====')
     dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'dataset.csv'))
     model_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'model.pkl'))
-    result_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'tfidf.csv'))
     X_train_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'X_train.pkl'))
     
     # Mengambil label pada dataset csv
     data_csv = pd.read_csv(dataset_path)
     documents_sentiment = list(data_csv['label'])
 
-    # Preprocssing
+    # Preprocessing
     text_cleaner = TextCleaner()
-    
-    comments = list(data_csv['comment'])
-    raw_dataset = [text_cleaner.preprocess_text(raw) for raw in comments]
+    cleaned_data = [text_cleaner.preprocess_text(text) for text in data_csv['comment']]
     
     # Calculating TFIDF
     vectorizer = TfidfVectorizer()
-    X_train = vectorizer.fit_transform(raw_dataset)
+    X_train = vectorizer.fit_transform(cleaned_data)
     
     joblib.dump(vectorizer, X_train_path)
     
@@ -188,82 +191,61 @@ def train_model():
 
     joblib.dump(model, model_path)
 
-train_model()
+
+#* Fungsi untuk melihat hyperlance
+def print_hyperplane(model):
+    print('===== Hyperlance =====')
+    # Akses nilai w dan b dari model
+    w = model.coef_.toarray()  # konversi sparse matrix ke dense array
+    b = model.intercept_[0]  # bias
+    
+    print(f"Persamaan hyperplane: w·x + b = 0")
+    print(f"w (vektor bobot): {w}")
+    print(f"b (bias): {b}")
+    
+    # Cek dimensi w dengan menggunakan .shape, bukan len()
+    if w.shape[1] == 2:  # Jika hanya dua fitur (2D), kita bisa cetak atau visualisasikan hyperplane
+        print(f"Persamaan hyperplane dalam 2D: {w[0][0]}*x1 + {w[0][1]}*x2 + {b} = 0")
+
+    return w, b
+
 
 #* Fungsi untuk prediksi
 def predict(test_text: str):
-    dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'dataset.csv'))
+    print('===== Prediksi =====')
     X_train_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'X_train.pkl'))
-    
-    # data = pd.read_csv(dataset_path)
-    # raw_data = list(data['comment'])
+    model_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'model.pkl'))
+    output_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), 'static', 'uploads'))
 
     # Preprocessing test text
     preprocessor = TextCleaner()
-    # data_train = [preprocessor.preprocess_text(raw) for raw in raw_data]
+    test_text = preprocessor.preprocess_text(test_text)
 
     # Vectorization
-    
     tfidf_model = joblib.load(X_train_path)
-    tfidf_matrix = tfidf_model.transform([test_text])
-    
-    # Export to CSV
-    terms = tfidf_model.get_feature_names_out()
-    tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), columns=terms)
-    tfidf_df_sorted = tfidf_df.sort_index(axis=1)
-    tfidf_df_sorted.to_csv('tfidf_matrix.csv', index=False)
-    
-    # vectorizer = TfidfVectorizer()
-    # tfidf_matrix = vectorizer.fit_transform(X_train_path)
-
-    # # Convert to DataFrame
-    # terms = vectorizer.get_feature_names_out()
-    # tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), columns=terms)
-
-    # # Save to CSV
-    # tfidf_df_sorted = tfidf_df.sort_index(axis=1)
-    # tfidf_df_sorted.to_csv('tfidf_from_lib.csv', index=False)
-
-    # # Prepare data testing
-    data_test = preprocessor.preprocess_text(test_text)
-
-    # FIT data testing
-    # tfidf_matrix_test = vectorizer.transform([data_test])
-    
-    # tfidf_df_test = pd.DataFrame(tfidf_matrix_test.toarray(), columns=terms)
-    
-    # # Hitung TF mentah
-    # raw_counts = pd.Series(data_test.split()).value_counts()
-    # tf_values = [raw_counts.get(term, 0) for term in terms]
-
-    # # Tambahkan kolom TF mentah
-    # tfidf_df_sorted_test = tfidf_df_test.sort_index(axis=1).T
-    # tfidf_df_sorted_test['TF'] = tf_values  # Tambahkan kolom TF
-
-    # # Menyesuaikan urutan kolom
-    # tfidf_df_sorted_test = tfidf_df_sorted_test[['TF', 0]]  # Menggunakan indeks 0 untuk TFIDFN
-
-    # # Simpan ke CSV
-    # tfidf_df_sorted_test.columns = ['TF', 'TFIDFN']  # Sesuaikan nama kolom
-    # tfidf_df_sorted_test.to_csv('tfidf_fit_from_lib.csv', index_label='Terms')
-    
+    tfidf_matrix_test = tfidf_model.transform([test_text])
     
     #! SVM
-    # model_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'model.pkl'))
+    model = joblib.load(model_path)
     
-    # model = joblib.load(model_path)
+    # Predict
+    prediction = model.predict(tfidf_matrix_test)
+
+    # Akses nilai w, b, dan x
+    w = model.coef_.toarray()  # vektor bobot
+    b = model.intercept_  # bias
+    x = tfidf_matrix_test.toarray()  # vektor input data (dikonversi ke dense array)
     
-    # # Convert sparse matrix to dense array
-    # tfidf_matrix_test_dense = tfidf_matrix_test.toarray()
-    
-    # prediction = model.predict(tfidf_matrix_test_dense)
-    
-    # return prediction
+    # Simpan w, b, dan x ke file CSV terpisah
+    pd.DataFrame(w).to_csv(os.path.join(output_dir, 'w.csv'), header=False, index=False)
+    pd.DataFrame(b).to_csv(os.path.join(output_dir, 'b.csv'), header=False, index=False)
+    pd.DataFrame(x).to_csv(os.path.join(output_dir, 'x.csv'), header=False, index=False)
 
 
-# generate_csv_manual()
-
-# train_model()
+    return prediction
 
 
-# print(predict('Tidak sesuai sama yng d pesen, yang d pesen sadeor yng datang hymeys.... Sangat tidak sesuai sama yang d pesen....'))
+
+generate_csv_manual()
+train_model()
+print(predict('cantiknya tasya farasya kebangetan.??semoga sehat selalu'))
