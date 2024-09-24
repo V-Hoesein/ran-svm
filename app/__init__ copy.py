@@ -136,80 +136,134 @@ class TFIDFCalculator:
         return tfidf_norm
 
 
-#* Fungsi untuk generate csv metriks tfidf dan svm model
-def train_model():
+#* Fungsi untuk generate csv metriks tfidf
+def generate_csv_manual():
     dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'dataset.csv'))
     result_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'tfidf.csv'))
-    model_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'model.pkl'))
     
     # Mengambil label pada dataset csv
     data_csv = pd.read_csv(dataset_path)
-    documents_sentiment = list(data_csv['label']) 
+    documents_sentiment = list(data_csv['label'])
 
-    # Menghitung TFIDF
     text_cleaner = TextCleaner()
     
     tfidf_calculator = TFIDFCalculator(dataset_path, result_path, text_cleaner)
     metricts_tfidf = tfidf_calculator.process()
+    
+    print('TFIDF has calculated!')
+    return metricts_tfidf
 
-    # Transformasi array of dict tfidf kedalam dataframe
-    X = pd.DataFrame(metricts_tfidf)
 
+#* Fungsi untuk train model SVM
+def train_model():
+    dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'dataset.csv'))
+    model_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'model.pkl'))
+    result_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'tfidf.csv'))
+    X_train_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'X_train.pkl'))
+    
+    # Mengambil label pada dataset csv
+    data_csv = pd.read_csv(dataset_path)
+    documents_sentiment = list(data_csv['label'])
+
+    # Preprocssing
+    text_cleaner = TextCleaner()
+    
+    comments = list(data_csv['comment'])
+    raw_dataset = [text_cleaner.preprocess_text(raw) for raw in comments]
+    
+    # Calculating TFIDF
+    vectorizer = TfidfVectorizer()
+    X_train = vectorizer.fit_transform(raw_dataset)
+    
+    joblib.dump(vectorizer, X_train_path)
+    
     # Konversi label sentimen menjadi angka 0 untuk negatif dan 1 untuk positif
     encoder = LabelEncoder()
-    y = encoder.fit_transform(documents_sentiment)
+    y_train = encoder.fit_transform(documents_sentiment)
 
-    # Membuat Model SVM / Train
+    # Membuat Model Train SVM
     model = SVC(kernel='linear')
 
-    model.fit(X,y)
+    model.fit(X_train, y_train)
 
     joblib.dump(model, model_path)
-    
 
+train_model()
+
+#* Fungsi untuk prediksi
 def predict(test_text: str):
-    # Load dataset
     dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'dataset.csv'))
-    data = pd.read_csv(dataset_path)
-    raw_data = list(data['comment'])
+    X_train_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'X_train.pkl'))
+    
+    # data = pd.read_csv(dataset_path)
+    # raw_data = list(data['comment'])
 
+    # Preprocessing test text
     preprocessor = TextCleaner()
-    data_train = [preprocessor.preprocess_text(raw) for raw in raw_data]
+    # data_train = [preprocessor.preprocess_text(raw) for raw in raw_data]
 
     # Vectorization
-    vectorizer = TfidfVectorizer()
-    tfidf_matrix = vectorizer.fit_transform(data_train)
-
-    # Convert to DataFrame
-    terms = vectorizer.get_feature_names_out()
+    
+    tfidf_model = joblib.load(X_train_path)
+    tfidf_matrix = tfidf_model.transform([test_text])
+    
+    # Export to CSV
+    terms = tfidf_model.get_feature_names_out()
     tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), columns=terms)
-
-    # Save to CSV
     tfidf_df_sorted = tfidf_df.sort_index(axis=1)
-    tfidf_df_sorted.to_csv('tfidf_from_lib.csv', index=False)
+    tfidf_df_sorted.to_csv('tfidf_matrix.csv', index=False)
+    
+    # vectorizer = TfidfVectorizer()
+    # tfidf_matrix = vectorizer.fit_transform(X_train_path)
 
-    # Prepare data testing
+    # # Convert to DataFrame
+    # terms = vectorizer.get_feature_names_out()
+    # tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), columns=terms)
+
+    # # Save to CSV
+    # tfidf_df_sorted = tfidf_df.sort_index(axis=1)
+    # tfidf_df_sorted.to_csv('tfidf_from_lib.csv', index=False)
+
+    # # Prepare data testing
     data_test = preprocessor.preprocess_text(test_text)
 
     # FIT data testing
-    tfidf_matrix_test = vectorizer.transform([data_test])
+    # tfidf_matrix_test = vectorizer.transform([data_test])
     
-    tfidf_df_test = pd.DataFrame(tfidf_matrix_test.toarray(), columns=terms)
+    # tfidf_df_test = pd.DataFrame(tfidf_matrix_test.toarray(), columns=terms)
     
-    # Hitung TF mentah
-    raw_counts = pd.Series(data_test.split()).value_counts()
-    tf_values = [raw_counts.get(term, 0) for term in terms]
+    # # Hitung TF mentah
+    # raw_counts = pd.Series(data_test.split()).value_counts()
+    # tf_values = [raw_counts.get(term, 0) for term in terms]
 
-    # Tambahkan kolom TF mentah
-    tfidf_df_sorted_test = tfidf_df_test.sort_index(axis=1).T
-    tfidf_df_sorted_test['TF'] = tf_values  # Tambahkan kolom TF
+    # # Tambahkan kolom TF mentah
+    # tfidf_df_sorted_test = tfidf_df_test.sort_index(axis=1).T
+    # tfidf_df_sorted_test['TF'] = tf_values  # Tambahkan kolom TF
 
-    # Menyesuaikan urutan kolom
-    tfidf_df_sorted_test = tfidf_df_sorted_test[['TF', 0]]  # Menggunakan indeks 0 untuk TFIDFN
+    # # Menyesuaikan urutan kolom
+    # tfidf_df_sorted_test = tfidf_df_sorted_test[['TF', 0]]  # Menggunakan indeks 0 untuk TFIDFN
 
-    # Simpan ke CSV
-    tfidf_df_sorted_test.columns = ['TF', 'TFIDFN']  # Sesuaikan nama kolom
-    tfidf_df_sorted_test.to_csv('tfidf_fit_from_lib.csv', index_label='Terms')
+    # # Simpan ke CSV
+    # tfidf_df_sorted_test.columns = ['TF', 'TFIDFN']  # Sesuaikan nama kolom
+    # tfidf_df_sorted_test.to_csv('tfidf_fit_from_lib.csv', index_label='Terms')
+    
+    
+    #! SVM
+    # model_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'model.pkl'))
+    
+    # model = joblib.load(model_path)
+    
+    # # Convert sparse matrix to dense array
+    # tfidf_matrix_test_dense = tfidf_matrix_test.toarray()
+    
+    # prediction = model.predict(tfidf_matrix_test_dense)
+    
+    # return prediction
 
-predict('cantiknya tasya farasya kebangetan.??semoga sehat selalu')
 
+# generate_csv_manual()
+
+# train_model()
+
+
+# print(predict('Tidak sesuai sama yng d pesen, yang d pesen sadeor yng datang hymeys.... Sangat tidak sesuai sama yang d pesen....'))
