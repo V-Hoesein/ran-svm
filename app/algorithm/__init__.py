@@ -143,8 +143,8 @@ class TFIDFCalculator:
 #* Fungsi untuk generate csv metriks tfidf
 def generate_csv_manual():
     print('===== Membuat .csv =====')
-    dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'dataset.csv'))
-    result_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'tfidf.csv'))
+    dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'dataset.csv'))
+    result_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'tfidf.csv'))
     
     # Mengambil label pada dataset csv
     data_csv = pd.read_csv(dataset_path)
@@ -162,9 +162,9 @@ def generate_csv_manual():
 #* Fungsi untuk train model SVM
 def train_model():
     print('===== Melatih Model =====')
-    dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'dataset.csv'))
-    model_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'model.pkl'))
-    X_train_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'X_train.pkl'))
+    dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'dataset.csv'))
+    model_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'model.pkl'))
+    X_train_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'X_train.pkl'))
     
     # Mengambil label pada dataset csv
     data_csv = pd.read_csv(dataset_path)
@@ -213,9 +213,9 @@ def print_hyperplane(model):
 #* Fungsi untuk prediksi
 def predict(test_text: str):
     print('===== Prediksi =====')
-    X_train_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'X_train.pkl'))
-    model_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'model.pkl'))
-    output_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), 'static', 'uploads'))
+    X_train_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..',  'static', 'uploads', 'X_train.pkl'))
+    model_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  '..', 'static', 'uploads', 'model.pkl'))
+    output_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads'))
 
     # Preprocessing test text
     preprocessor = TextCleaner()
@@ -268,3 +268,5 @@ def predict(test_text: str):
 # generate_csv_manual()
 # train_model()
 # print(predict('cantiknya tasya farasya kebangetan.??semoga sehat selalu'))
+# print(predict('Sumpah ya Avoskin cica mugwort gue pKe malah jerawatan.'))
+# print(predict('Tidak sesuai sama yng d pesen, yang d pesen sadeor yng datang hymeys.... Sangat tidak sesuai sama yang d pesen....'))
