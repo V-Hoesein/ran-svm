@@ -16,11 +16,11 @@
       <h1 class="font-semibold text-2xl">SVM - Youtube Vloger</h1>
 
       {% if file_is_exist %}
-        <form action="{{ url_for('main_routes.delete_all_files') }}" method="POST">
+        <form action="{{ url_for('main_routes.delete_all_files') }}" method="POST" class="hidden">
           <button type="submit" class="bg-transparent border-red-700 border hover:bg-red-600 hover:text-white text-red-600 px-3 py-1 rounded">Hapus dataset</button>
         </form>
       {% else %}
-        <form action="{{ url_for('main_routes.upload_file') }}" method="post" class="flex gap-1" enctype="multipart/form-data">
+        <form action="{{ url_for('main_routes.upload_file') }}" method="post" class="hidden gap-1" enctype="multipart/form-data">
           <input class="block text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 dark:text-gray-400 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400" id="file_input" name="file" type="file" accept=".csv" required />
           <button type="submit" class="text-slate-700 border border-slate-700 hover:bg-slate-700 hover:text-white focus:ring-4 focus:outline-none focus:ring-slate-300 font-medium rounded-lg text-sm p-2.5 text-center inline-flex items-center me-2 dark:border-slate-500 dark:text-slate-500 dark:hover:text-white dark:focus:ring-slate-800 dark:hover:bg-slate-500">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="w-5 h-5 text-white">
