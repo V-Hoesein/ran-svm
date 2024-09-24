@@ -1,12 +1,25 @@
+import csv
+import os
+import math
+from collections import Counter
 import string
 import re
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 from nltk.tokenize import word_tokenize
 from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
 from Sastrawi.StopWordRemover.StopWordRemoverFactory import StopWordRemoverFactory
 from nltk.corpus import stopwords
+from sklearn.preprocessing import LabelEncoder
+from sklearn.svm import SVC
+import joblib
+
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 class TextCleaner:
     def __init__(self):
+        print('===== Preprocessing =====')
         self.stemmer = StemmerFactory().create_stemmer()
         stopword_factory = StopWordRemoverFactory()
         self.combined_stopwords = set(stopword_factory.get_stop_words()).union(set(stopwords.words('english')))
@@ -18,7 +31,7 @@ class TextCleaner:
         text = re.sub(r'[^a-zA-Z\s]', '', text)
         return text
 
-    def preprocess_text(self, text):
+    def preprocess_text(self, text) -> str:
         text = self.clean_text(text).lower()
         tokens = word_tokenize(text)
         tokens = [word for word in tokens if word not in self.combined_stopwords]
@@ -26,123 +39,232 @@ class TextCleaner:
         return ' '.join(stemmed)
 
 
-import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from collections import Counter
+class TFIDFCalculator:
+    def __init__(self, input_file, output_file, text_cleaner):
+        print('===== Menghitung TFIDF Manual =====')
+        self.input_file = input_file
+        self.output_file = output_file
+        self.text_cleaner = text_cleaner
+        self.documents = []
+        self.terms = set()
 
-class TFIDFVectorizer:
-    def __init__(self):
-        self.vectorizer = TfidfVectorizer()
+    def load_data(self):
+        with open(self.input_file, 'r') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                cleaned_text = self.text_cleaner.preprocess_text(row['comment'])
+                self.documents.append(cleaned_text)
+        self.terms = set(' '.join(self.documents).split())
 
-    def fit(self, texts):
-        self.vectorizer.fit(texts)
+    def calculate_tf(self):
+        term_frequencies = []
+        for doc in self.documents:
+            counter = Counter(doc.split())
+            tf_raw = {term: counter.get(term, 0) for term in self.terms}
+            total_terms = sum(counter.values())
+            tf_norm = {term: round(count / total_terms, 4) for term, count in tf_raw.items()}
+            tf_raw = {term: round(count, 4) for term, count in tf_raw.items()}
+            term_frequencies.append((tf_raw, tf_norm))
+        return term_frequencies
 
-    def transform(self, texts):
-        return self.vectorizer.transform(texts)
+    def calculate_df(self):
+        df = {term: 0 for term in self.terms}
+        for doc in self.documents:
+            doc_terms = set(doc.split())
+            for term in doc_terms:
+                df[term] += 1
+        return df
 
-    def compute_metrics(self, df_comments):
-        # Fit the vectorizer on training data to get IDF values
-        self.fit(df_comments['preprocess'])
-        idf_values = self.vectorizer.idf_
-        terms = self.vectorizer.get_feature_names_out()
+    def calculate_idf(self, df):
+        num_docs = len(self.documents)
+        idf = {term: round(math.log((1 + num_docs) / (1+df[term]))+1, 4) for term in self.terms}
+        return idf
 
-        raw_tf_dicts = [self.compute_raw_tf(doc) for doc in df_comments['preprocess']]
-        tf_dicts = [self.compute_tf(doc) for doc in df_comments['preprocess']]
+    def calculate_tfidf(self, term_frequencies, idf):
+        tfidf = []
+        tfidf_norm = []
+        
+        for tf_raw, tf_norm in term_frequencies:
+            # Calculate unnormalized TF-IDF using tf_norm
+            tfidf_doc = {term: round(tf_norm[term] * idf[term], 4) for term in self.terms}
+            tfidf.append(tfidf_doc)
 
-        raw_tf_df = pd.DataFrame(raw_tf_dicts).fillna(0).T
-        tf_df = pd.DataFrame(tf_dicts).fillna(0).T
-        idf_df = pd.DataFrame(idf_values, index=terms, columns=["IDF"])
-
-        # Compute Document Frequency (DF)
-        df_values = (raw_tf_df > 0).sum(axis=1)
-
-        # Create final DataFrame
-        final_df = pd.DataFrame(index=terms)
-        final_df['Term'] = terms  # Add 'Term' column
-        final_df['DF'] = df_values
-        final_df['IDF'] = idf_df['IDF']
-
-        # Add raw TF and normalized TF to final DataFrame
-        final_df = final_df.join(raw_tf_df.add_prefix('TF'))
-        final_df = final_df.join(tf_df.add_prefix('TFN'))
-
-        # Compute manual TF-IDF (TFN * IDF)
-        for doc in tf_df.columns:
-            final_df[f'TFIDF_{doc}'] = final_df[f'TFN{doc}'] * final_df['IDF']
-
-        return final_df.round(3)
-
-import joblib
-import os
-from sklearn.svm import SVC
-
-class TextClassifier:
-    def __init__(self, dataset_path, result_path):
-        self.dataset_path = dataset_path
-        self.result_path = result_path
-        self.cleaner = TextCleaner()
-        self.vectorizer = TFIDFVectorizer()
-
-        # Load dataset
-        self.df_comments = pd.read_csv(self.dataset_path)
-        self.df_comments['preprocess'] = self.df_comments['comment'].apply(self.cleaner.preprocess_text)
-
-    def train_model(self):
-        # Compute TF-IDF metrics
-        final_df = self.vectorizer.compute_metrics(self.df_comments)
-
-        # Save metrics to CSV
-        final_df.to_csv(f'{self.result_path}/train_metrics.csv', index=False)
-
-        # Train SVM model
-        X_train = self.vectorizer.transform(self.df_comments['preprocess'])
-        y_train = self.df_comments['label']
-        self.model = SVC(random_state=0, kernel='linear')
-        self.model.fit(X_train, y_train)
-
-    def predict(self, text_test: str):
-        X_test = self.cleaner.preprocess_text(text_test)
-        X_test_vectorized = self.vectorizer.transform([X_test])
-        prediction = self.model.predict(X_test_vectorized)
-        return prediction[0]
-
-class ModelManager:
-    def __init__(self, dataset_path, result_path):
-        self.dataset_path = dataset_path
-        self.result_path = result_path
-        self.model_file = os.path.join(result_path, 'trained_model.pkl')
-
-    def load_or_train_model(self):
-        if os.path.exists(self.model_file):
-            return joblib.load(self.model_file)
-        else:
-            classifier = TextClassifier(self.dataset_path, self.result_path)
-            classifier.train_model()
-            joblib.dump(classifier, self.model_file)
-            return classifier
+            # Calculate L2 norm for normalization
+            norm = math.sqrt(sum(value**2 for value in tfidf_doc.values()))
+            
+            # Normalize using L2 norm
+            if norm != 0:
+                tfidf_norm_doc = {term: round(value / norm, 4) for term, value in tfidf_doc.items()}
+            else:
+                tfidf_norm_doc = {term: 0 for term in self.terms}
+            
+            tfidf_norm.append(tfidf_norm_doc)
+        
+        return tfidf, tfidf_norm
 
 
-def predict(new_text: str):
-    dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'dataset.csv'))
-    result_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads'))
+    def export_results(self, term_frequencies, df, idf, tfidf, tfidf_norm):
+        with open(self.output_file, 'w', newline='') as file:
+            writer = csv.writer(file)
+            header = ['Term'] + [f'TF{i + 1}' for i in range(len(self.documents))] + \
+                    [f'TFN{i + 1}' for i in range(len(self.documents))] + ['DF', 'IDF'] + \
+                    [f'TFIDF{i + 1}' for i in range(len(self.documents))] + \
+                    [f'TFIDFN{i + 1}' for i in range(len(self.documents))]
 
-    model_manager = ModelManager(dataset_path, result_path)
-    classifier = model_manager.load_or_train_model()
+            writer.writerow(header)
 
-    # Preprocess and transform the new_text to get TF-IDF values
-    preprocessed_text = classifier.cleaner.preprocess_text(new_text)
-    tfidf_vector = classifier.vectorizer.transform([preprocessed_text])
+            # Sort the terms in ascending order
+            sorted_terms = sorted(self.terms)
 
-    # Get feature names
-    feature_names = classifier.vectorizer.vectorizer.get_feature_names_out()
+            for term in sorted_terms:
+                row = [term]
+                for doc_tf in term_frequencies:
+                    row.append(doc_tf[0][term])
+                for doc_tf in term_frequencies:
+                    row.append(doc_tf[1][term])
+                row.append(df[term])
+                row.append(idf[term])
+                for doc_tfidf in tfidf:
+                    row.append(doc_tfidf[term])
+                for doc_tfidf_norm in tfidf_norm:
+                    row.append(doc_tfidf_norm[term])
+                writer.writerow(row)
+
+    def process(self):
+        self.load_data()
+        term_frequencies = self.calculate_tf()
+        df = self.calculate_df()
+        idf = self.calculate_idf(df)
+        tfidf, tfidf_norm = self.calculate_tfidf(term_frequencies, idf)
+        self.export_results(term_frequencies, df, idf, tfidf, tfidf_norm)
+        return tfidf_norm
+
+
+#* Fungsi untuk generate csv metriks tfidf
+def generate_csv_manual():
+    print('===== Membuat .csv =====')
+    dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'dataset.csv'))
+    result_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'tfidf.csv'))
     
-    # Create a DataFrame for the TF-IDF values
-    tfidf_df = pd.DataFrame(tfidf_vector.toarray(), columns=feature_names)
+    # Mengambil label pada dataset csv
+    data_csv = pd.read_csv(dataset_path)
+    documents_sentiment = list(data_csv['label'])
 
-    # Export TF-IDF values to CSV
-    tfidf_df.to_csv(f'{result_path}/tfidf_values.csv', index=False)
+    text_cleaner = TextCleaner()
+    
+    tfidf_calculator = TFIDFCalculator(dataset_path, result_path, text_cleaner)
+    metricts_tfidf = tfidf_calculator.process()
+    
+    print('TFIDF has calculated!')
+    return metricts_tfidf
 
-    # Make predictions
-    prediction = classifier.predict(new_text)
+
+#* Fungsi untuk train model SVM
+def train_model():
+    print('===== Melatih Model =====')
+    dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'dataset.csv'))
+    model_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'model.pkl'))
+    X_train_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'X_train.pkl'))
+    
+    # Mengambil label pada dataset csv
+    data_csv = pd.read_csv(dataset_path)
+    documents_sentiment = list(data_csv['label'])
+
+    # Preprocessing
+    text_cleaner = TextCleaner()
+    cleaned_data = [text_cleaner.preprocess_text(text) for text in data_csv['comment']]
+    
+    # Calculating TFIDF
+    vectorizer = TfidfVectorizer()
+    X_train = vectorizer.fit_transform(cleaned_data)
+    
+    joblib.dump(vectorizer, X_train_path)
+    
+    # Konversi label sentimen menjadi angka 0 untuk negatif dan 1 untuk positif
+    encoder = LabelEncoder()
+    y_train = encoder.fit_transform(documents_sentiment)
+
+    # Membuat Model Train SVM
+    model = SVC(kernel='linear')
+
+    model.fit(X_train, y_train)
+
+    joblib.dump(model, model_path)
+
+
+#* Fungsi untuk melihat hyperlance
+def print_hyperplane(model):
+    print('===== Hyperlance =====')
+    # Akses nilai w dan b dari model
+    w = model.coef_.toarray()  # konversi sparse matrix ke dense array
+    b = model.intercept_[0]  # bias
+    
+    print(f"Persamaan hyperplane: w·x + b = 0")
+    print(f"w (vektor bobot): {w}")
+    print(f"b (bias): {b}")
+    
+    # Cek dimensi w dengan menggunakan .shape, bukan len()
+    if w.shape[1] == 2:  # Jika hanya dua fitur (2D), kita bisa cetak atau visualisasikan hyperplane
+        print(f"Persamaan hyperplane dalam 2D: {w[0][0]}*x1 + {w[0][1]}*x2 + {b} = 0")
+
+    return w, b
+
+
+#* Fungsi untuk prediksi
+def predict(test_text: str):
+    print('===== Prediksi =====')
+    X_train_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'X_train.pkl'))
+    model_path = os.path.realpath(os.path.join(os.path.dirname(__file__),  'static', 'uploads', 'model.pkl'))
+    output_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), 'static', 'uploads'))
+
+    # Preprocessing test text
+    preprocessor = TextCleaner()
+    test_text = preprocessor.preprocess_text(test_text)
+
+    # Vectorization
+    tfidf_model = joblib.load(X_train_path)
+    tfidf_matrix_test = tfidf_model.transform([test_text])
+    
+    #! SVM
+    model = joblib.load(model_path)
+    
+    # Predict
+    prediction = model.predict(tfidf_matrix_test)
+
+    # Akses nilai w, b, dan x
+    w = model.coef_.toarray()  # vektor bobot
+    b = model.intercept_  # bias
+    x = tfidf_matrix_test.toarray()  # vektor input data (dikonversi ke dense array)
+    
+    # Simpan w, b, dan x ke file CSV terpisah
+    pd.DataFrame(w).to_csv(os.path.join(output_dir, 'w.csv'), header=False, index=False)
+    pd.DataFrame(b).to_csv(os.path.join(output_dir, 'b.csv'), header=False, index=False)
+    pd.DataFrame(x).to_csv(os.path.join(output_dir, 'x.csv'), header=False, index=False)
+    
+    
+    # ** Export ke .csv hasil Fit test text dengan dokumen latih
+    terms = tfidf_model.get_feature_names_out()
+    tfidf_df_test = pd.DataFrame(tfidf_matrix_test.toarray(), columns=terms)
+
+    # Hitung TF mentah
+    raw_counts = pd.Series(test_text.split()).value_counts()
+    tf_values = [raw_counts.get(term, 0) for term in terms]
+    
+    # Tambahkan kolom TF mentah
+    tfidf_df_sorted_test = tfidf_df_test.sort_index(axis=1).T
+    tfidf_df_sorted_test['TF'] = tf_values
+    
+    # Menyesuaikan urutan kolom
+    tfidf_df_sorted_test = tfidf_df_sorted_test[['TF', 0]]
+
+    # Simpan ke CSV
+    tfidf_df_sorted_test.columns = ['TF', 'TFIDFN']
+    tfidf_df_sorted_test.to_csv(f'{output_dir}/tfidf_fit.csv', index_label='Terms')
 
     return prediction
+
+
+
+# generate_csv_manual()
+# train_model()
+# print(predict('cantiknya tasya farasya kebangetan.??semoga sehat selalu'))
