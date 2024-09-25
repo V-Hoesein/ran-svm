@@ -12,8 +12,11 @@ from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
 from Sastrawi.StopWordRemover.StopWordRemoverFactory import StopWordRemoverFactory
 from nltk.corpus import stopwords
 from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score
 from sklearn.svm import SVC
 import joblib
+import time
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 
@@ -162,34 +165,102 @@ def generate_csv_manual():
 #* Fungsi untuk train model SVM
 def train_model():
     print('===== Melatih Model =====')
+    
+    # Path file
     dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'dataset.csv'))
     model_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'model.pkl'))
     X_train_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'X_train.pkl'))
+    encoder_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'encoder.pkl'))
     
-    # Mengambil label pada dataset csv
+    # Load dataset
     data_csv = pd.read_csv(dataset_path)
     documents_sentiment = list(data_csv['label'])
 
-    # Preprocessing
+    # Preprocessing teks
     text_cleaner = TextCleaner()
     cleaned_data = [text_cleaner.preprocess_text(text) for text in data_csv['comment']]
     
-    # Calculating TFIDF
+    # Menghitung TFIDF
     vectorizer = TfidfVectorizer()
     X_train = vectorizer.fit_transform(cleaned_data)
     
+    # Simpan vectorizer
     joblib.dump(vectorizer, X_train_path)
     
-    # Konversi label sentimen menjadi angka 0 untuk negatif dan 1 untuk positif
+    # Label encoding (ubah label menjadi angka)
     encoder = LabelEncoder()
     y_train = encoder.fit_transform(documents_sentiment)
 
-    # Membuat Model Train SVM
-    model = SVC(kernel='linear')
+    # Simpan encoder
+    joblib.dump(encoder, encoder_path)
 
+    # Membuat dan melatih model SVM dengan kernel linear
+    model = SVC(kernel='linear')
     model.fit(X_train, y_train)
 
+    # Simpan model yang sudah dilatih
     joblib.dump(model, model_path)
+
+    print("Model, TFIDF vectorizer, dan encoder berhasil disimpan.")
+
+
+#* Fungsi untuk evaluasi model
+def evaluate_model():
+    start_time = time.time()
+    
+    dataset_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'dataset.csv'))
+    X_train_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'X_train.pkl'))
+    encoder_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'encoder.pkl'))
+    model_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'model.pkl'))
+
+    # Load dataset
+    print("Loading dataset...")
+    data = pd.read_csv(dataset_path)
+
+    # Load vectorizer and transform the data
+    print("Loading vectorizer and transforming data...")
+    vectorizer = joblib.load(X_train_path)
+    X = vectorizer.transform(data['comment'])  # Transforming to sparse matrix
+
+    # Load encoder and encode labels
+    print("Loading encoder and transforming labels...")
+    encoder = joblib.load(encoder_path)
+    y = encoder.transform(data['label'])
+
+    # Split data into training and testing sets (80:20)
+    print("Splitting data into train and test sets...")
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Load pre-trained model or train it if not available
+    print("Loading or training the model...")
+    try:
+        model = joblib.load(model_path)
+    except FileNotFoundError:
+        model = SVC(kernel='linear')
+        model.fit(X_train, y_train)
+        joblib.dump(model, model_path)
+    
+    # Melakukan prediksi pada test set
+    print("Predicting on test set...")
+    y_pred = model.predict(X_test)
+
+    # Menghitung metrik evaluasi
+    print("Calculating evaluation metrics...")
+    accuracy = accuracy_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred, average='weighted')
+    recall = recall_score(y_test, y_pred, average='weighted')
+    precision = precision_score(y_test, y_pred, average='weighted')
+
+    # Menampilkan hasil evaluasi
+    print(f"Accuracy: {accuracy:.4f}")
+    print(f"F1-Score: {f1:.4f}")
+    print(f"Recall: {recall:.4f}")
+    print(f"Precision: {precision:.4f}")
+
+    # Print total time taken
+    print(f"--- Total evaluation time: {time.time() - start_time:.2f} seconds ---")
+    
+    return accuracy, f1, recall, precision
 
 
 #* Fungsi untuk melihat hyperlance
@@ -270,3 +341,4 @@ def predict(test_text: str):
 # print(predict('cantiknya tasya farasya kebangetan.??semoga sehat selalu'))
 # print(predict('Sumpah ya Avoskin cica mugwort gue pKe malah jerawatan.'))
 # print(predict('Tidak sesuai sama yng d pesen, yang d pesen sadeor yng datang hymeys.... Sangat tidak sesuai sama yang d pesen....'))
+evaluate_model()
