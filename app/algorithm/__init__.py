@@ -17,8 +17,8 @@ from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_sc
 from sklearn.svm import SVC
 import joblib
 import time
-
 from sklearn.feature_extraction.text import TfidfVectorizer
+
 
 class TextCleaner:
     def __init__(self):
@@ -220,7 +220,7 @@ def evaluate_model():
     # Load vectorizer and transform the data
     print("Loading vectorizer and transforming data...")
     vectorizer = joblib.load(X_train_path)
-    X = vectorizer.transform(data['comment'])  # Transforming to sparse matrix
+    X = vectorizer.transform(data['comment'])
 
     # Load encoder and encode labels
     print("Loading encoder and transforming labels...")
@@ -256,6 +256,8 @@ def evaluate_model():
     print(f"F1-Score: {f1:.4f}")
     print(f"Recall: {recall:.4f}")
     print(f"Precision: {precision:.4f}")
+    print(f'y_pred : {y_pred}')
+    print(f'y_test : {y_test}')
 
     # Print total time taken
     print(f"--- Total evaluation time: {time.time() - start_time:.2f} seconds ---")
@@ -341,4 +343,4 @@ def predict(test_text: str):
 # print(predict('cantiknya tasya farasya kebangetan.??semoga sehat selalu'))
 # print(predict('Sumpah ya Avoskin cica mugwort gue pKe malah jerawatan.'))
 # print(predict('Tidak sesuai sama yng d pesen, yang d pesen sadeor yng datang hymeys.... Sangat tidak sesuai sama yang d pesen....'))
-evaluate_model()
+# evaluate_model()
