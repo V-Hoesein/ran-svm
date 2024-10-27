@@ -18,7 +18,10 @@ from sklearn.svm import SVC
 import joblib
 import time
 from sklearn.feature_extraction.text import TfidfVectorizer
+import nltk
 
+# nltk.download('punkt')
+# nltk.download('punkt_tab')
 
 class TextCleaner:
     def __init__(self):
