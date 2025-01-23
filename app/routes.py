@@ -100,14 +100,10 @@ def single_classification():
         # clear_uploads_folder()
         text = request.form.get('text')
         
-        will_predict = [text]
+        # 1 = netral, 0 = negatif, 2 = positif
+        result = 'netral' if predict(text)[0] == 1 else 'negatif' if predict(text)[0] == 0 else 'positif'
         
-        if '&&' in text:
-            will_predict = text.split('&&')
-        
-        result = predict(will_predict)
-        
-        session.update({'result': result, 'text':text})
+        session.update({'result': result, 'text': text})
         flash('Classification successful!', 'success')
         return redirect(url_for('main_routes.index'))
     
